@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"syscall"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/app"
@@ -15,6 +16,11 @@ import (
 var version = "dev"
 
 func main() {
+	if err := ensureForkPlatform(runtime.GOOS, runtime.GOARCH); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	app.Version = app.ResolveVersion(version)
 
 	if err := app.Run(); err != nil {
