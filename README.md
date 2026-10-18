@@ -278,9 +278,8 @@ Then use your agent normally. Your configs are snapshotted before every write, a
 | **[Quickstart](docs/quickstart.md)** · **[Usage](docs/usage.md)** | Install, prerequisites, every CLI command and flag |
 | **[Agents](docs/agents.md)** | Feature matrix and per-agent notes for all 17 |
 | **[ODD](docs/usage.md#organic-driven-development-odd)** · **[Routing](docs/trigger-rules.md)** | Everyday direct and delegated work |
-| **[Review](docs/review-integration.md)** · **[Architecture](docs/architecture/organic-rdd.md)** | The RDD contract, lifecycle and threat model |
+| **[Review](docs/review-integration.md)** | The RDD contract and lifecycle |
 | **[Engram](docs/engram.md)** · **[Components](docs/components.md)** | Memory commands, skills, presets and personas |
-| **[Codebase Guide](docs/CODEBASE-GUIDE.md)** | Extend the codebase |
 | **[Telemetry](docs/telemetry.md)** | What we count, and how to turn it off |
 
 <div align="right"><a href="#top">Back to top</a></div>
@@ -320,8 +319,6 @@ Keep the image URL exactly as shown — it is how I find and feature the project
 ## About the author
 
 Built by [Alan Buscaglia](https://github.com/Gentleman-Programming) (Gentleman Programming): 15 years of enterprise architecture, a community of thousands of developers testing these tools daily, and one rule for AI-assisted work — **verifying beats generating**.
-
-Teams adopting AI and finding it isn't working — resistance, everyone prompting their own way, no shared quality bar — can reach out about **[engagements built on these same open-source tools →](docs/consulting.md)**.
 
 <div align="center">
 
