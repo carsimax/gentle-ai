@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -130,9 +129,6 @@ func TestInjectAntigravityPrevalidatesGlobalMCPConfigBeforeWrites(t *testing.T) 
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.locked {
-				if runtime.GOOS == "windows" {
-					t.Skip("file permission bits are not supported on Windows")
-				}
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores file permission bits")
 				}
@@ -331,10 +327,8 @@ func antigravityRecoveryFixture(t *testing.T) (home, settingsPath, pluginDir, pl
 		if err := os.WriteFile(path, []byte(content), mode); err != nil {
 			t.Fatalf("WriteFile(%q) error = %v", path, err)
 		}
-		if runtime.GOOS != "windows" {
-			if err := os.Chmod(path, mode); err != nil {
-				t.Fatalf("Chmod(%q) error = %v", path, err)
-			}
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatalf("Chmod(%q) error = %v", path, err)
 		}
 		snapshot, err := captureAntigravityPluginAsset(path)
 		if err != nil {
@@ -377,7 +371,7 @@ func assertAntigravityAssetState(t *testing.T, label, path string, want antigrav
 	if !bytes.Equal(got, want.content) {
 		t.Fatalf("%s: %q bytes changed\nwant:\n%s\ngot:\n%s", label, path, want.content, got)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm() != want.mode {
+	if info.Mode().Perm() != want.mode {
 		t.Fatalf("%s: %q mode = %04o, want %04o", label, path, info.Mode().Perm(), want.mode)
 	}
 }
@@ -419,9 +413,6 @@ func TestInjectAntigravityRejectsUnclassifiablePluginAssetBeforeWrites(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.skip != "" {
-				if runtime.GOOS == "windows" {
-					t.Skip("file permission bits are not supported on Windows")
-				}
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores file permission bits")
 				}
@@ -433,8 +424,8 @@ func TestInjectAntigravityRejectsUnclassifiablePluginAssetBeforeWrites(t *testin
 			if err == nil {
 				t.Fatalf("Inject(antigravity) succeeded; want a plugin asset classification error")
 			}
-			// The error quotes the path with %q, which escapes Windows backslashes,
-			// so match the quoted form rather than the raw path.
+			// The error quotes the path with %q, so match the quoted form rather
+			// than the raw path.
 			if !strings.Contains(err.Error(), fmt.Sprintf("%q", hooksPath)) || !strings.Contains(err.Error(), "plugin asset") {
 				t.Fatalf("error = %v, want it to name the unclassifiable plugin asset %q", err, hooksPath)
 			}
@@ -1081,9 +1072,6 @@ func TestEngramSelectedSettingsRefuseNestedCommentsAndLockedMode(t *testing.T) {
 		{"locked mode", "{\"mcp\":{}}\n", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" && tc.mode != 0o600 {
-				t.Skip("file permission bits are not supported on Windows")
-			}
 			path := filepath.Join(t.TempDir(), "opencode.jsonc")
 			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
 				t.Fatal(err)
@@ -1099,7 +1087,7 @@ func TestEngramSelectedSettingsRefuseNestedCommentsAndLockedMode(t *testing.T) {
 			if statErr != nil {
 				t.Fatal(statErr)
 			}
-			if runtime.GOOS != "windows" && info.Mode().Perm() != tc.mode {
+			if info.Mode().Perm() != tc.mode {
 				t.Fatalf("settings mode changed: %04o", info.Mode().Perm())
 			}
 			if err := os.Chmod(path, 0o600); err != nil {
@@ -1123,9 +1111,6 @@ func TestEngramSelectedSettingsPreservePrivateMode(t *testing.T) {
 	}
 	if _, err := mergeJSONFile(path, []byte(`{"mcp":{"engram":{"type":"local"}}}`)); err != nil {
 		t.Fatal(err)
-	}
-	if runtime.GOOS == "windows" {
-		return // POSIX permission bits are not preserved on Windows.
 	}
 	info, err := os.Stat(path)
 	if err != nil || info.Mode().Perm() != 0o600 {
@@ -1230,7 +1215,7 @@ func TestInjectClaudeWritesUserRegistryPreservingUnrelatedData(t *testing.T) {
 	assertNestedStrings(t, registry, []string{"mcp", "--tools=agent"}, "mcpServers", "engram", "args")
 	if info, statErr := os.Stat(registryPath); statErr != nil {
 		t.Fatalf("Stat(user registry) error = %v", statErr)
-	} else if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+	} else if info.Mode().Perm() != 0o600 {
 		t.Fatalf("user registry mode = %o; want 0600", info.Mode().Perm())
 	}
 	legacyPath := filepath.Join(home, ".claude", "mcp", "engram.json")
@@ -1636,7 +1621,7 @@ func TestInjectCursorMergesEngramToSettings(t *testing.T) {
 }
 
 func TestInjectCursorWithMalformedMCPJsonRecovery(t *testing.T) {
-	// Real Windows users may have a ~/.cursor/mcp.json that starts with non-JSON
+	// Real users may have a ~/.cursor/mcp.json that starts with non-JSON
 	// content (e.g. "allow: all" or just "a"). The installer should recover by
 	// treating the broken file as {} and proceeding with the overlay merge.
 	home := t.TempDir()
@@ -2028,23 +2013,23 @@ func TestInjectAntigravityLeavesUserModifiedGlobalEngramUntouched(t *testing.T) 
 	}
 }
 
-func TestStableEngramCommandRecognizesLinuxbrewPath(t *testing.T) {
-	SetLookPathForTest(t, "/home/linuxbrew/.linuxbrew/bin/engram", "")
+func TestStableEngramCommandRecognizesHomebrewPath(t *testing.T) {
+	SetLookPathForTest(t, "/opt/homebrew/bin/engram", "")
 
-	if !isStableHomebrewEngramPath("/home/linuxbrew/.linuxbrew/bin/engram") {
-		t.Fatalf("Linuxbrew stable path must be recognized as a stable Homebrew engram path")
+	if !isStableHomebrewEngramPath("/opt/homebrew/bin/engram") {
+		t.Fatalf("Apple Silicon Homebrew stable path must be recognized as a stable Homebrew engram path")
 	}
-	if got := preferredStableEngramCommand(); got != "/home/linuxbrew/.linuxbrew/bin/engram" {
-		t.Fatalf("preferredStableEngramCommand() = %q, want the Linuxbrew stable path", got)
+	if got := preferredStableEngramCommand(); got != "/opt/homebrew/bin/engram" {
+		t.Fatalf("preferredStableEngramCommand() = %q, want the Homebrew stable path", got)
 	}
 
 	// Standard agents (including Antigravity plugin install) resolve the
 	// stable command through stableEngramCommandForMergedConfig when no prior
-	// config exists — the Linuxbrew stable path must be preserved there too.
+	// config exists — the Homebrew stable path must be preserved there too.
 	home := t.TempDir()
 	got := stableEngramCommandForMergedConfig(filepath.Join(home, "missing", "mcp_config.json"), model.AgentAntigravity)
-	if got != "/home/linuxbrew/.linuxbrew/bin/engram" {
-		t.Fatalf("stableEngramCommandForMergedConfig(antigravity) = %q, want the Linuxbrew stable path", got)
+	if got != "/opt/homebrew/bin/engram" {
+		t.Fatalf("stableEngramCommandForMergedConfig(antigravity) = %q, want the Homebrew stable path", got)
 	}
 }
 
@@ -2115,11 +2100,11 @@ func TestInjectCodexWritesTOMLMCP(t *testing.T) {
 	if cmdLine == "" {
 		t.Fatalf("config.toml missing command line; got:\n%s", text)
 	}
-	// The command value must end with "engram" or "engram.exe".
+	// The command value must end with "engram".
 	cmdVal := strings.TrimPrefix(cmdLine, "command = ")
 	cmdVal = strings.Trim(cmdVal, `"`)
 	base := filepath.Base(cmdVal)
-	if base != "engram" && base != "engram.exe" {
+	if base != "engram" {
 		t.Fatalf("config.toml command %q does not reference engram binary; got:\n%s", cmdVal, text)
 	}
 	if !strings.Contains(text, `"--tools=agent"`) {

@@ -7,40 +7,12 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
-// TestResolveEngramInstallNonBrewReturnsError verifies that after the fix,
-// resolver.go only handles brew. Non-brew cases handled by DownloadLatestBinary.
-// This is tested indirectly via the engram package — after our change,
-// InstallCommand for linux/windows returns an error (those cases removed).
+// TestInstallCommandNonBrewReturnsError verifies resolver.go only handles
+// brew; the non-brew path is handled by DownloadLatestBinary.
 func TestInstallCommandNonBrewReturnsError(t *testing.T) {
-	tests := []struct {
-		name    string
-		profile system.PlatformProfile
-	}{
-		{
-			name:    "ubuntu returns error (no longer go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-		},
-		{
-			name:    "arch returns error (no longer go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-		},
-		{
-			name:    "fedora returns error (no longer go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-		},
-		{
-			name:    "windows returns error (no longer go install)",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := InstallCommand(tt.profile)
-			if err == nil {
-				t.Errorf("InstallCommand(%s) should return error for non-brew: expected error, got nil", tt.profile.PackageManager)
-			}
-		})
+	profile := system.PlatformProfile{OS: "darwin"}
+	if _, err := InstallCommand(profile); err == nil {
+		t.Errorf("InstallCommand(%q) should return error for non-brew: expected error, got nil", profile.PackageManager)
 	}
 }
 

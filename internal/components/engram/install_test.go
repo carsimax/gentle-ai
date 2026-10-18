@@ -27,26 +27,11 @@ func TestInstallCommandByProfile(t *testing.T) {
 			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew"},
 			want:    [][]string{{"brew", "tap", "Gentleman-Programming/homebrew-tap"}, {"brew", "install", "engram"}},
 		},
-		// Linux and Windows now use DownloadLatestBinary() — InstallCommand returns an error
-		// to signal that callers must use the direct download path instead.
+		// Without brew, InstallCommand returns an error so callers use
+		// DownloadLatestBinary() instead.
 		{
-			name:    "ubuntu returns error (uses DownloadLatestBinary instead of go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			wantErr: true,
-		},
-		{
-			name:    "arch returns error (uses DownloadLatestBinary instead of go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			wantErr: true,
-		},
-		{
-			name:    "fedora returns error (uses DownloadLatestBinary instead of go install)",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			wantErr: true,
-		},
-		{
-			name:    "unsupported package manager returns error",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "zypper"},
+			name:    "darwin without brew returns error (uses DownloadLatestBinary)",
+			profile: system.PlatformProfile{OS: "darwin"},
 			wantErr: true,
 		},
 	}
