@@ -19,10 +19,10 @@ Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runn
 
 | ID | Specs | Route | Status | Commit |
 | --- | --- | --- | --- | --- |
-| T1 | S3 | inline | in progress: 93 files deleted, build/vet green, suite running | |
-| T2 | S4, S5 | inline | in progress: workflows/scripts removed, ci.yml on macos-14, goreleaser darwin/arm64 | |
-| T3 | S6 | inline | done: RED (undefined ensureForkPlatform) then GREEN; darwin/amd64 rejected under Rosetta | |
-| T4 | S2, S7, S8 | inline | done: scripts/test-port-upstream.sh 11/11 PASS (found and fixed empty-commit bug) | |
+| T1 | S3 | inline | done: build/vet green; test-fast suite green except 3 baseline failures | f2512374 |
+| T2 | S4, S5 | inline | done | f2512374 |
+| T3 | S6 | inline | done: RED (undefined ensureForkPlatform) then GREEN; darwin/amd64 rejected under Rosetta | 94ee1a4b |
+| T4 | S2, S7, S8 | inline | done: scripts/test-port-upstream.sh 11/11 PASS (found and fixed empty-commit bug) | 602b5072 |
 | T5 | S9 | inline | blocked on decision | |
 
 Route evidence: no Writer trigger (units depend on each other's deletions; no parallel units), so the parent works inline.
@@ -35,3 +35,6 @@ Route evidence: no Writer trigger (units depend on each other's deletions; no pa
 - L4: Shared files with `runtime.GOOS` branches (46 production files) are kept unchanged in this feature; editing them raises cherry-pick conflicts and gives no runtime gain.
 - L5: Kept generic Docker e2e harness files (`e2e/Dockerfile.{ubuntu,arch,fedora,claude-network-none}`, `e2e/docker-test.sh`) because shipped skills reference `docker-test.sh`; their CI jobs were removed. Kept `internal/assets/gga/gga.ps1` because `internal/components/gga/runtime.go` embeds it (shared file, L4).
 - L6: Linux build (`GOOS=linux go build ./...`) no longer compiles after T1, expected for a darwin-only fork.
+- L7: Baseline failures also present on `cmx`: `internal/update` (TestReleaseSecurityScriptsAreSyntacticallyValidAndFailClosed, TestCanonicalReleasePublicKeysControlRealLinkerBuild) and `internal/components/reviewassets` (TestOwnershipReuseRejectsLedgerWithoutMutation).
+- L8: Native review assessed high (item 5); user chose "Omitir esta vez"; decline recorded as declined_this_candidate.
+- Next: S9 decision (fork version scheme and update notice).
