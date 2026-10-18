@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -25,9 +24,6 @@ import (
 func setRealHome(t *testing.T, homeDir string) {
 	t.Helper()
 	t.Setenv("HOME", homeDir)
-	if runtime.GOOS == "windows" {
-		t.Setenv("USERPROFILE", homeDir)
-	}
 }
 
 func TestAdapterIdentityAndCapabilities(t *testing.T) {

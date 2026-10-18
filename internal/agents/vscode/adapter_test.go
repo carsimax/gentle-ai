@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -80,40 +79,10 @@ func TestSettingsPathUsesVSCodeUserProfile(t *testing.T) {
 	a := NewAdapter()
 	home := "/tmp/home"
 
-	switch runtime.GOOS {
-	case "darwin":
-		path := a.SettingsPath(home)
-		want := filepath.Join(home, "Library", "Application Support", "Code", "User", "settings.json")
-		if path != want {
-			t.Fatalf("SettingsPath() = %q, want %q", path, want)
-		}
-	case "windows":
-		appData := filepath.Join(home, "AppData", "Roaming")
-		t.Setenv("APPDATA", appData)
-		path := a.SettingsPath(home)
-		want := filepath.Join(appData, "Code", "User", "settings.json")
-		if path != want {
-			t.Fatalf("SettingsPath() = %q, want %q", path, want)
-		}
-	default:
-		// A custom root never follows ambient XDG_CONFIG_HOME: containment wins.
-		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-		path := a.SettingsPath(home)
-		want := filepath.Join(home, ".config", "Code", "User", "settings.json")
-		if path != want {
-			t.Fatalf("SettingsPath() = %q, want %q", path, want)
-		}
-
-		// The real user home is the only root that honors XDG_CONFIG_HOME.
-		realHome, err := os.UserHomeDir()
-		if err != nil {
-			t.Fatalf("UserHomeDir() error = %v", err)
-		}
-		path = a.SettingsPath(realHome)
-		want = filepath.Join(home, "xdg", "Code", "User", "settings.json")
-		if path != want {
-			t.Fatalf("SettingsPath(realHome) = %q, want %q", path, want)
-		}
+	path := a.SettingsPath(home)
+	want := filepath.Join(home, "Library", "Application Support", "Code", "User", "settings.json")
+	if path != want {
+		t.Fatalf("SettingsPath() = %q, want %q", path, want)
 	}
 }
 
@@ -121,39 +90,9 @@ func TestMCPConfigPathUsesVSCodeUserProfile(t *testing.T) {
 	a := NewAdapter()
 	home := "/tmp/home"
 
-	switch runtime.GOOS {
-	case "darwin":
-		path := a.MCPConfigPath(home, "context7")
-		want := filepath.Join(home, "Library", "Application Support", "Code", "User", "mcp.json")
-		if path != want {
-			t.Fatalf("MCPConfigPath() = %q, want %q", path, want)
-		}
-	case "windows":
-		appData := filepath.Join(home, "AppData", "Roaming")
-		t.Setenv("APPDATA", appData)
-		path := a.MCPConfigPath(home, "context7")
-		want := filepath.Join(appData, "Code", "User", "mcp.json")
-		if path != want {
-			t.Fatalf("MCPConfigPath() = %q, want %q", path, want)
-		}
-	default:
-		// A custom root never follows ambient XDG_CONFIG_HOME: containment wins.
-		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-		path := a.MCPConfigPath(home, "context7")
-		want := filepath.Join(home, ".config", "Code", "User", "mcp.json")
-		if path != want {
-			t.Fatalf("MCPConfigPath() = %q, want %q", path, want)
-		}
-
-		// The real user home is the only root that honors XDG_CONFIG_HOME.
-		realHome, err := os.UserHomeDir()
-		if err != nil {
-			t.Fatalf("UserHomeDir() error = %v", err)
-		}
-		path = a.MCPConfigPath(realHome, "context7")
-		want = filepath.Join(home, "xdg", "Code", "User", "mcp.json")
-		if path != want {
-			t.Fatalf("MCPConfigPath(realHome) = %q, want %q", path, want)
-		}
+	path := a.MCPConfigPath(home, "context7")
+	want := filepath.Join(home, "Library", "Application Support", "Code", "User", "mcp.json")
+	if path != want {
+		t.Fatalf("MCPConfigPath() = %q, want %q", path, want)
 	}
 }

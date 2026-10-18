@@ -67,15 +67,12 @@ func (a *Adapter) CapabilityManifest() capabilitymanifest.AgentCapabilityManifes
 
 // InstallCommand returns the display-only command shown when Gemini CLI is
 // not detected — gentle-ai never executes this (see agentInstallStep in
-// internal/cli/run.go). Gemini CLI installs via npm on all platforms;
+// internal/cli/run.go). Gemini CLI installs via npm;
 // postinstall scripts are blocked to mitigate supply-chain risk. The version
 // advises "latest" rather than a pin: a human reads and runs this, and a
 // hardcoded version goes stale the moment a newer Gemini CLI ships.
-func (a *Adapter) InstallCommand(profile system.PlatformProfile) ([][]string, error) {
+func (a *Adapter) InstallCommand(_ system.PlatformProfile) ([][]string, error) {
 	const pkg = "@google/gemini-cli@latest"
-	if profile.OS == "linux" && !profile.NpmWritable {
-		return [][]string{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}, nil
-	}
 	return [][]string{{"npm", "install", "-g", "--ignore-scripts", pkg}}, nil
 }
 

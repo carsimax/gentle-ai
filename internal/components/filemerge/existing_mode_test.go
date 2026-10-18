@@ -4,14 +4,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
 func TestExistingFileMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 	dir := t.TempDir()
 	private := filepath.Join(dir, "private.json")
 	if err := os.WriteFile(private, []byte("{}"), 0o600); err != nil {
@@ -44,9 +40,6 @@ func TestExistingFileMode(t *testing.T) {
 }
 
 func TestExistingFileModePreservedByWriteFileAtomic(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 	path := filepath.Join(t.TempDir(), "opencode.json")
 	if err := os.WriteFile(path, []byte("{}"), 0o600); err != nil {
 		t.Fatal(err)
@@ -71,9 +64,6 @@ func TestExistingFileModePreservedByWriteFileAtomic(t *testing.T) {
 // WriteFileAtomic treats perm 0 as its 0644 default, so ExistingFileMode must
 // not hand it a zero mode.
 func TestExistingFileModeNeverWidensZeroPermissionFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 	dir := t.TempDir()
 	locked := filepath.Join(dir, "opencode.json")
 	if err := os.WriteFile(locked, []byte("{}"), 0o600); err != nil {

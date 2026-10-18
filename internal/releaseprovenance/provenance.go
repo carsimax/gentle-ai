@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 )
 
 const (
@@ -98,15 +97,13 @@ func Build(config []byte, input Input) ([]byte, error) {
 		return nil, errors.New("release provenance input is invalid")
 	}
 	version := input.Tag[1:]
-	platforms := [][2]string{{"darwin", "amd64"}, {"darwin", "arm64"}, {"linux", "amd64"}, {"linux", "arm64"}}
-	artifacts := make([]any, 0, len(platforms)+1)
-	for _, platform := range platforms {
-		artifacts = append(artifacts, binaryArtifact{
-			Name: "gentle-ai_" + version + "_" + platform[0] + "_" + platform[1] + ".tar.gz", Kind: "binary",
-			GOOS: platform[0], GOARCH: platform[1], CGOEnabled: "0", Trimpath: true,
-		})
+	artifacts := []any{
+		binaryArtifact{
+			Name: "gentle-ai_" + version + "_darwin_arm64.tar.gz", Kind: "binary",
+			GOOS: "darwin", GOARCH: "arm64", CGOEnabled: "0", Trimpath: true,
+		},
+		contractArtifact{Name: "gentle-ai-review-provider-contract-" + input.ProviderContractSemver + ".tar.gz", Kind: providerArchiveKind},
 	}
-	artifacts = append(artifacts, contractArtifact{Name: "gentle-ai-review-provider-contract-" + input.ProviderContractSemver + ".tar.gz", Kind: providerArchiveKind})
 	digest := sha256.Sum256(config)
 	encoded, err := json.Marshal(manifest{
 		Schema:                 schema,
@@ -170,16 +167,6 @@ func readReleaseConfiguration(configPath string) ([]byte, error) {
 	return config, nil
 }
 
-// manifestPerm is what a just-written 0o644 manifest reads back as. Windows
-// has no POSIX permission bits: Go projects the read-only attribute onto the
-// mode, so a writable regular file always reports 0o666 there.
-func manifestPerm() os.FileMode {
-	if runtime.GOOS == "windows" {
-		return 0o666
-	}
-	return 0o644
-}
-
 func writeManifestOnce(output string, payload []byte) error {
 	parent, err := os.Stat(filepath.Dir(output))
 	if err != nil || !parent.IsDir() {
@@ -201,7 +188,7 @@ func writeManifestOnce(output string, payload []byte) error {
 		return errors.New("release provenance output cannot be closed")
 	}
 	info, err := os.Lstat(output)
-	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm() != manifestPerm() {
+	if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() || info.Mode().Perm() != 0o644 {
 		return errors.New("release provenance output is invalid")
 	}
 	readback, err := os.ReadFile(output)

@@ -184,8 +184,7 @@ func hasCanonicalAntigravityCodeGraphServer(data []byte) bool {
 		if !filepath.IsAbs(server.Command) {
 			return false
 		}
-		command := filepath.Base(server.Command)
-		if command != "codegraph" && !strings.EqualFold(command, "codegraph.exe") {
+		if filepath.Base(server.Command) != "codegraph" {
 			return false
 		}
 	}

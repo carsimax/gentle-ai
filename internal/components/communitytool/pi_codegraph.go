@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -865,7 +864,7 @@ func readPiCodeGraphManifest(path string) (piCodeGraphManifest, error) {
 	if err != nil {
 		return piCodeGraphManifest{}, fmt.Errorf("stat Pi CodeGraph manifest %q: %w", path, err)
 	}
-	if !piCodeGraphManifestPermissionsSafe(runtime.GOOS, info.Mode()) {
+	if !piCodeGraphManifestPermissionsSafe(info.Mode()) {
 		return piCodeGraphManifest{}, fmt.Errorf("Pi CodeGraph manifest %q has unsafe permissions %#o", path, info.Mode().Perm())
 	}
 	var manifest piCodeGraphManifest
@@ -875,8 +874,8 @@ func readPiCodeGraphManifest(path string) (piCodeGraphManifest, error) {
 	return manifest, nil
 }
 
-func piCodeGraphManifestPermissionsSafe(goos string, mode os.FileMode) bool {
-	return goos == "windows" || mode.Perm()&0o077 == 0
+func piCodeGraphManifestPermissionsSafe(mode os.FileMode) bool {
+	return mode.Perm()&0o077 == 0
 }
 
 // releaseStalePiChildren drops ownership of children that no longer exist, so

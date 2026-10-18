@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -101,78 +100,31 @@ func TestOSSpecificPaths(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		goos    string
 		home    string
 		envVars map[string]string
 		wantDir string
 	}{
 		{
 			name:    "macOS",
-			goos:    "darwin",
 			home:    testHome,
 			envVars: map[string]string{},
 			wantDir: filepath.Join(testHome, "Library", "Application Support", "Trae", "User"),
 		},
 		{
-			name:    "Linux default XDG",
-			goos:    "linux",
-			home:    testHome,
-			envVars: map[string]string{},
-			wantDir: filepath.Join(testHome, ".config", "Trae", "User"),
-		},
-		{
-			name:    "Linux custom XDG for the real home",
-			goos:    "linux",
+			name:    "macOS ignores XDG_CONFIG_HOME for the real home",
 			home:    realHome,
 			envVars: map[string]string{"XDG_CONFIG_HOME": "/custom/config"},
-			wantDir: "/custom/config/Trae/User",
-		},
-		{
-			name:    "Linux custom XDG never escapes a custom root",
-			goos:    "linux",
-			home:    testHome,
-			envVars: map[string]string{"XDG_CONFIG_HOME": "/custom/config"},
-			wantDir: filepath.Join(testHome, ".config", "Trae", "User"),
-		},
-		{
-			name:    "Windows default APPDATA",
-			goos:    "windows",
-			home:    testHome,
-			envVars: map[string]string{},
-			wantDir: filepath.Join(testHome, "AppData", "Roaming", "Trae", "User"),
-		},
-		{
-			name:    "Windows custom APPDATA for the real home",
-			goos:    "windows",
-			home:    realHome,
-			envVars: map[string]string{"APPDATA": "C:\\CustomAppData"},
-			wantDir: "C:\\CustomAppData\\Trae\\User",
-		},
-		{
-			name:    "Windows custom APPDATA never escapes a custom root",
-			goos:    "windows",
-			home:    testHome,
-			envVars: map[string]string{"APPDATA": "C:\\CustomAppData"},
-			wantDir: filepath.Join(testHome, "AppData", "Roaming", "Trae", "User"),
+			wantDir: filepath.Join(realHome, "Library", "Application Support", "Trae", "User"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if runtime.GOOS != tt.goos {
-				t.Skipf("Skipping %s test on %s", tt.goos, runtime.GOOS)
-			}
 			home := tt.home
 			for k, v := range tt.envVars {
 				if v != "" {
 					t.Setenv(k, v)
 				}
-			}
-			if _, ok := tt.envVars["XDG_CONFIG_HOME"]; !ok && runtime.GOOS == "linux" {
-				t.Setenv("XDG_CONFIG_HOME", "")
-			}
-			if _, ok := tt.envVars["APPDATA"]; !ok && runtime.GOOS == "windows" {
-				t.Setenv("APPDATA", "")
 			}
 
 			gotDir := a.SystemPromptDir(home)

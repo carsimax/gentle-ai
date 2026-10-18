@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -39,9 +38,6 @@ func runOpenCodeSentinelSubprocess() {
 }
 
 func TestIsolateProtectsExternalOpenCodeConfig(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("Linux XDG resolution regression")
-	}
 	for _, scenario := range []string{"inherited", "unset", "explicit_after_isolation"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
@@ -61,8 +57,8 @@ func TestIsolateProtectsExternalOpenCodeConfig(t *testing.T) {
 			cmd := exec.CommandContext(ctx, os.Args[0])
 			// Replace inherited values rather than append duplicate environment keys.
 			env := map[string]string{
-				isolateSentinelSubprocessEnv: "xdg",
-				"HOME":                       home, "USERPROFILE": home,
+				isolateSentinelSubprocessEnv:     "xdg",
+				"HOME":                           home,
 				"XDG_CONFIG_HOME":                external,
 				"OPENCODE_CONFIG_DIR":            filepath.Join(root, "override-opencode"),
 				"PI_CODING_AGENT_DIR":            filepath.Join(root, "override-pi"),

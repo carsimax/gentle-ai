@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -180,22 +179,18 @@ func TestOpenCodeTelemetryOwnedUpdateRollback(t *testing.T) {
 func TestOpenCodeTelemetryManagedModeEquivalence(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
-		goos     string
 		expected os.FileMode
 		observed os.FileMode
 		want     bool
 	}{
-		{"exact writable on Unix", "linux", 0644, 0644, true},
-		{"read-only drift on Unix", "linux", 0644, 0444, false},
-		{"different writable mode on Unix", "linux", 0644, 0640, false},
-		{"widened writable plugin on Windows", "windows", 0644, 0666, true},
-		{"widened writable manifest on Windows", "windows", 0600, 0666, true},
-		{"read-only expected file remains distinct on Windows", "windows", 0444, 0666, false},
-		{"other writable modes remain distinct on Windows", "windows", 0644, 0664, false},
+		{"exact writable", 0644, 0644, true},
+		{"read-only drift", 0644, 0444, false},
+		{"different writable mode", 0644, 0640, false},
+		{"widened writable mode", 0644, 0666, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := managedModeMatchesForOS(tt.goos, tt.expected, tt.observed); got != tt.want {
-				t.Errorf("managedModeMatchesForOS(%q, %#o, %#o) = %t, want %t", tt.goos, tt.expected, tt.observed, got, tt.want)
+			if got := managedModeMatches(tt.expected, tt.observed); got != tt.want {
+				t.Errorf("managedModeMatches(%#o, %#o) = %t, want %t", tt.expected, tt.observed, got, tt.want)
 			}
 		})
 	}
@@ -257,16 +252,10 @@ func TestOpenCodeTelemetryManifestStrictness(t *testing.T) {
 			case "mode-value":
 				text = string(replaceManagedManifestMode(t, raw, json.RawMessage("511")))
 			case "mode-drift":
-				if runtime.GOOS == "windows" {
-					t.Skip("Windows does not preserve POSIX chmod mode drift")
-				}
 				if err := os.Chmod(paths[0], 0600); err != nil {
 					t.Fatal(err)
 				}
 			case "metadata-mode":
-				if runtime.GOOS == "windows" {
-					t.Skip("Windows does not support writable metadata after POSIX chmod drift")
-				}
 				if err := os.Chmod(paths[1], 0644); err != nil {
 					t.Fatal(err)
 				}
@@ -307,7 +296,7 @@ func TestOpenCodeTelemetryManifestStrictness(t *testing.T) {
 }
 
 // replaceManagedManifestMode targets the parsed field instead of assuming the
-// platform's serialized writable mode (0600 on POSIX, 0666 on Windows).
+// serialized writable mode.
 func replaceManagedManifestMode(t *testing.T, raw []byte, mode json.RawMessage) []byte {
 	t.Helper()
 	var manifest map[string]json.RawMessage

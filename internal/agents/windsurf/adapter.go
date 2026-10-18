@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/capabilitymanifest"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -22,10 +21,7 @@ type statResult struct {
 //   - Global AI config (MCP, memories): ~/.codeium/windsurf/
 //     → mcp_config.json
 //     → memories/global_rules.md
-//   - Editor settings (platform-specific):
-//     macOS:   ~/Library/Application Support/Windsurf/User/settings.json
-//     Linux:   ~/.config/Windsurf/User/settings.json   (respects XDG_CONFIG_HOME)
-//     Windows: %APPDATA%\Windsurf\User\settings.json
+//   - Editor settings: ~/Library/Application Support/Windsurf/User/settings.json
 //
 // Detection: Windsurf is a desktop app. We detect it by the presence of
 // ~/.codeium/windsurf (the AI config dir), which is created on first launch.
@@ -96,26 +92,10 @@ func (a *Adapter) SettingsPath(homeDir string) string {
 	return filepath.Join(a.windsurfUserDir(homeDir), "settings.json")
 }
 
-// windsurfUserDir returns the platform-specific Windsurf User config directory.
-// Windsurf follows the same platform conventions as VS Code, substituting
-// the application name "Windsurf" for "Code".
+// windsurfUserDir returns the Windsurf User config directory. Windsurf follows
+// the same conventions as VS Code, substituting "Windsurf" for "Code".
 func (a *Adapter) windsurfUserDir(homeDir string) string {
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(homeDir, "Library", "Application Support", "Windsurf", "User")
-	case "windows":
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			appData = filepath.Join(homeDir, "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "Windsurf", "User")
-	default: // linux and others
-		xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		if xdgConfigHome == "" {
-			xdgConfigHome = filepath.Join(homeDir, ".config")
-		}
-		return filepath.Join(xdgConfigHome, "Windsurf", "User")
-	}
+	return filepath.Join(homeDir, "Library", "Application Support", "Windsurf", "User")
 }
 
 // --- Config strategies ---

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -50,15 +49,11 @@ func TestResolvePackageBinForms(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.link != "" && runtime.GOOS == "windows" {
-				t.Skip("symlink permissions vary on Windows")
-			}
 			root := t.TempDir()
 			want := writeTarget(t, root, tc.target, 0o755)
 			// ResolvePackageBin returns the canonical executable, so the
-			// expectation must be canonical too: on the Windows runners
-			// t.TempDir() is an 8.3 short name that resolves to its long
-			// spelling.
+			// expectation must be canonical too: t.TempDir() may sit behind a
+			// symlinked temp root (for example /var -> /private/var on macOS).
 			canonicalWant, err := filepath.EvalSymlinks(want)
 			must(t, err)
 			want = canonicalWant
@@ -96,9 +91,6 @@ func TestResolvePackageBinErrors(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if (tc.setup == "nonexec" || tc.setup == "symlink") && runtime.GOOS == "windows" {
-				t.Skip("Windows does not use executable permission bits")
-			}
 			root := t.TempDir()
 			switch tc.setup {
 			case "package-missing":

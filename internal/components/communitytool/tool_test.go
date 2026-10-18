@@ -1,7 +1,6 @@
 package communitytool
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
@@ -22,14 +20,9 @@ import (
 
 // TestMain neutralizes ambient agent runtime-dir overrides (PI_CODING_AGENT_DIR,
 // OPENCODE_CONFIG_DIR) before anything else: this package's Pi CodeGraph tests
-// already set PI_CODING_AGENT_DIR explicitly per-test, but the codegraph
-// subprocess re-exec path below runs before any such t.Setenv takes effect.
+// already set PI_CODING_AGENT_DIR explicitly per-test.
 func TestMain(m *testing.M) {
 	testenv.Isolate()
-	if mode := os.Getenv("GENTLE_AI_CODEGRAPH_TEST_HELPER"); mode != "" {
-		runCodeGraphTestHelper(mode)
-		os.Exit(0)
-	}
 	codeGraphPackageLookPath = func(name string) (string, error) {
 		if name == "npm" {
 			return "/bin/npm", nil
@@ -39,7 +32,6 @@ func TestMain(m *testing.M) {
 	codeGraphPnpmGlobalBin = func() (string, error) {
 		return "/bin", nil
 	}
-	codeGraphCLIUsable = func(string) bool { return true }
 	piCodeGraphEffectiveMCPProbe = func(string) (PiCodeGraphMCPProbeResult, error) {
 		return PiCodeGraphMCPProbeResult{
 			AdapterAvailable: true,
@@ -59,25 +51,6 @@ func TestMain(m *testing.M) {
 		}, nil
 	}
 	os.Exit(m.Run())
-}
-
-func runCodeGraphTestHelper(mode string) {
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		request := scanner.Text()
-		if mode == "stall-initialize" || mode == "stall-tools-list" && strings.Contains(request, `"id":2`) {
-			time.Sleep(24 * time.Hour)
-		}
-		response := os.Getenv("GENTLE_AI_CODEGRAPH_TEST_RESPONSE")
-		if response == "" && strings.Contains(request, `"id":1`) {
-			response = `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fake","version":"1"}}}`
-		} else if response == "" && strings.Contains(request, `"id":2`) {
-			response = `{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"codegraph_explore","inputSchema":{"type":"object","properties":{"query":{"type":"string"},"maxFiles":{"type":"integer"},"projectPath":{"type":"string"}},"required":["query"]}}]}}`
-		}
-		if response != "" {
-			fmt.Fprintln(os.Stdout, response)
-		}
-	}
 }
 
 func TestDefinitionsIncludesCodeGraph(t *testing.T) {
@@ -1456,25 +1429,7 @@ func TestInstallRepairsMissingCLIWhenAgentMarkerExists(t *testing.T) {
 	}
 }
 
-func TestDetectStatusRejectsWSLWindowsNPMShimWithoutExecutingIt(t *testing.T) {
-	useCodeGraphWSLAdmission(t, true)
-	previousVersion := codeGraphInstalledVersion
-	t.Cleanup(func() { codeGraphInstalledVersion = previousVersion })
-	codeGraphInstalledVersion = func(string) (string, bool) {
-		t.Fatal("DetectStatus must not execute a candidate CodeGraph CLI")
-		return "", false
-	}
-
-	status := DetectStatus(model.CommunityToolCodeGraph, t.TempDir(), DetectorFunc(func(string) (string, error) {
-		return "/mnt/c/Users/alan/AppData/Roaming/npm/codegraph", nil
-	}))
-	if status.CLI != AvailabilityMissing || status.CLIPath != "" {
-		t.Fatalf("DetectStatus() = %#v, want WSL Windows npm shim rejected", status)
-	}
-}
-
-func TestDetectStatusAdmitsLinuxCLIPathsWithoutRequiringFiles(t *testing.T) {
-	useCodeGraphWSLAdmission(t, true)
+func TestDetectStatusAdmitsCLIPathsWithoutRequiringFiles(t *testing.T) {
 	previousVersion := codeGraphInstalledVersion
 	t.Cleanup(func() { codeGraphInstalledVersion = previousVersion })
 	codeGraphInstalledVersion = func(string) (string, bool) {
@@ -1484,62 +1439,17 @@ func TestDetectStatusAdmitsLinuxCLIPathsWithoutRequiringFiles(t *testing.T) {
 
 	for _, path := range []string{
 		"/bin/codegraph",
-		"/home/alan/.local/bin/codegraph",
-		"/home/alan/AppData/Roaming/npm/codegraph",
+		"/opt/homebrew/bin/codegraph",
+		"/Users/alan/.local/bin/codegraph",
 	} {
 		t.Run(path, func(t *testing.T) {
 			status := DetectStatus(model.CommunityToolCodeGraph, t.TempDir(), DetectorFunc(func(string) (string, error) {
 				return path, nil
 			}))
 			if status.CLI != AvailabilityAvailable || status.CLIPath != path {
-				t.Fatalf("DetectStatus() = %#v, want injected Linux path available", status)
+				t.Fatalf("DetectStatus() = %#v, want injected path available", status)
 			}
 		})
-	}
-}
-
-func TestInstallRejectsWSLWindowsNPMShimAfterPackageInstall(t *testing.T) {
-	home := t.TempDir()
-	mustWrite(t, filepath.Join(home, ".claude.json"), `{}`)
-	shim := "/mnt/c/Users/alan/AppData/Roaming/npm/codegraph"
-
-	previousPackageLookPath := codeGraphPackageLookPath
-	t.Cleanup(func() { codeGraphPackageLookPath = previousPackageLookPath })
-	codeGraphPackageLookPath = func(name string) (string, error) {
-		if name == "npm" {
-			return "/bin/npm", nil
-		}
-		return "", errors.New("not found")
-	}
-	useCodeGraphWSLAdmission(t, true)
-	previousVersion := codeGraphInstalledVersion
-	t.Cleanup(func() { codeGraphInstalledVersion = previousVersion })
-	codeGraphInstalledVersion = func(string) (string, bool) {
-		t.Fatal("CodeGraph admission must not execute the stale shim")
-		return "", false
-	}
-
-	var runnerCalls []string
-	result, err := InstallWithHome(model.CommunityToolCodeGraph, "/work/project", home, RunnerFunc(func(name string, args ...string) error {
-		runnerCalls = append(runnerCalls, strings.Join(append([]string{name}, args...), " "))
-		if name != "npm" {
-			return errors.New("CodeGraph runner must not receive a rejected shim")
-		}
-		return nil
-	}), DetectorFunc(func(string) (string, error) {
-		return shim, nil
-	}))
-	if err == nil || !strings.Contains(err.Error(), "did not leave a runnable codegraph CLI available") {
-		t.Fatalf("InstallWithHome() error = %v, want unavailable CodeGraph outcome after package install", err)
-	}
-	if !reflect.DeepEqual(runnerCalls, []string{"npm install -g @colbymchenry/codegraph@latest"}) {
-		t.Fatalf("runner calls = %#v, want package install before stale-shim re-admission blocks CodeGraph", runnerCalls)
-	}
-	if result.StatusBefore == nil || result.StatusBefore.CLI != AvailabilityMissing || result.StatusBefore.CLIPath != "" {
-		t.Fatalf("StatusBefore = %#v, want truthful absent CLI", result.StatusBefore)
-	}
-	if result.StatusAfter == nil || result.StatusAfter.CLI != AvailabilityMissing || result.StatusAfter.CLIPath != "" {
-		t.Fatalf("StatusAfter = %#v, want rejected shim to remain unavailable", result.StatusAfter)
 	}
 }
 
@@ -1623,18 +1533,6 @@ func mustWrite(t *testing.T, path string, content string) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("WriteFile(%q): %v", path, err)
 	}
-}
-
-func useCodeGraphWSLAdmission(t *testing.T, wsl bool) {
-	t.Helper()
-	previousCLIUsable := codeGraphCLIUsable
-	previousWSL := codeGraphWSL
-	t.Cleanup(func() {
-		codeGraphCLIUsable = previousCLIUsable
-		codeGraphWSL = previousWSL
-	})
-	codeGraphCLIUsable = defaultCodeGraphCLIUsable
-	codeGraphWSL = func() bool { return wsl }
 }
 
 func findAgentStatus(t *testing.T, status Status, id model.AgentID) AgentStatus {
