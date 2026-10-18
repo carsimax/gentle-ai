@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -168,9 +167,6 @@ func TestOpenCodeStatusWithAnUnsafeSealingKeyRefusesWithItsRepair(t *testing.T) 
 	t.Setenv("GENTLE_PI_REVIEW_RELAY_CONTRACT", "gentle-pi.review-relay/v1")
 	if testing.Short() {
 		t.Skip("requires git fixtures")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX key file modes")
 	}
 	home := reviewEnabledHome(t)
 	repo, started, store, _ := openCodeSealedLineage(t, "unsafe-key-status")

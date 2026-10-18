@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -54,9 +53,6 @@ func TestRejectedValidatorDispositionCompiledCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(t.TempDir(), "gentle-ai")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
-	}
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	build := exec.CommandContext(ctx, "go", "build", "-modcacherw", "-buildvcs=false", "-o", binary, "./cmd/gentle-ai")

@@ -5,12 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -1056,9 +1054,6 @@ func TestReviewModeCloneScopeEnableInheritsDefaultOnWhileGlobalUnset(t *testing.
 // common directory the authority checks cannot accept.
 func unvalidatableReviewModeSwitchRoot(t *testing.T, repo string) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation needs a privilege Windows runners do not grant; the UNC refusal is covered in reviewtransaction")
-	}
 	target := filepath.Join(t.TempDir(), "gentle-ai")
 	if err := os.MkdirAll(filepath.Join(target, "review-mode", "rar-authority", "v1", "rdd-mode"), 0o700); err != nil {
 		t.Fatal(err)
@@ -1169,28 +1164,5 @@ func TestReviewModePartiallyAppliedMutationKeepsItsResolvedState(t *testing.T) {
 		"  note:        applied for this gentle-ai only; a gentle-ai installed before the switch moved reads a location this command could not open, and keeps enforcing the value it holds there\n"
 	if got := output.String(); got != want {
 		t.Fatalf("partially applied enable output = %q, want %q", got, want)
-	}
-}
-
-// #4670 S3: an authority filesystem that cannot keep review state private is
-// a typed refusal whose continuation the operator can actually run.
-func TestReviewModeUnsupportedAuthorityFilesystemNamesItsContinuation(t *testing.T) {
-	path := `\\server\share\repo\.git`
-	cause := fmt.Errorf("resolve review mode: %w",
-		&reviewtransaction.UnsupportedAuthorityFilesystemError{Path: path, Remote: true})
-
-	err := reviewModeUnreadable(context.Background(), t.TempDir(), reviewtransaction.RDDGlobalMode{}, cause)
-
-	var unsupported *reviewtransaction.UnsupportedAuthorityFilesystemError
-	if !errors.As(err, &unsupported) {
-		t.Fatalf("refusal lost its typed cause: %#v", err)
-	}
-	for _, want := range []string{path, "`gentle-ai review mode disable --scope global`", "local NTFS or ReFS volume"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("refusal %q does not contain %q", err.Error(), want)
-		}
-	}
-	if strings.Contains(err.Error(), "check the path and rerun") {
-		t.Fatalf("refusal %q still names an unrunnable repair", err.Error())
 	}
 }

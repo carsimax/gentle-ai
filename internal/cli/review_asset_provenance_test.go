@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -394,9 +393,6 @@ func TestManagedAssetsContinuationUsesInvokingExecutable(t *testing.T) {
 		if bare {
 			return path
 		}
-		if runtime.GOOS == "windows" {
-			return "\"" + strings.ReplaceAll(path, "\"", "\\\"") + "\""
-		}
 		return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 	}
 
@@ -534,20 +530,10 @@ func TestManagedAssetsContinuationUsesInvokingExecutable(t *testing.T) {
 	if len(argv) != 4 || argv[0] != invoking || argv[1] != "sync" || argv[2] != "--agent" || argv[3] != "opencode" {
 		t.Fatalf("continuation command %q split to argv %q, want the invoking executable %q plus the sync dispatch", status.NextTransition.Continuation.Command, argv, invoking)
 	}
-	var run *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// The quoted Windows form is cmd.exe command syntax; PowerShell
-		// requires the call operator for a leading quoted token, so no
-		// in-process shell here can prove that platform's paste-and-run
-		// contract. The argv dispatch still exercises executable startup,
-		// CLI dispatch, and flag parsing.
-		run = exec.Command(argv[0], argv[1:]...)
-	} else {
-		// POSIX: run the printed line through a real shell exactly as an
-		// operator would paste it, proving the quoting survives expansion
-		// rather than merely decoding it ourselves.
-		run = exec.Command("sh", "-c", status.NextTransition.Continuation.Command)
-	}
+	// Run the printed line through a real shell exactly as an operator would
+	// paste it, proving the quoting survives expansion rather than merely
+	// decoding it ourselves.
+	run := exec.Command("sh", "-c", status.NextTransition.Continuation.Command)
 	run.Env = append(os.Environ(), "GENTLE_AI_TEST_CLI_STANDIN=1")
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("executing the advertised continuation %q failed: %v\n%s", status.NextTransition.Continuation.Command, err, out)
