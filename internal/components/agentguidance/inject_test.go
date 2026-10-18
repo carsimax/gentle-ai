@@ -260,7 +260,6 @@ func TestInjectRoutingInstallsGuidanceForEverySupportedAgent(t *testing.T) {
 func TestInjectRoutingStaysContainedUnderHostileEnvironment(t *testing.T) {
 	hostile := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(hostile, "xdg"))
-	t.Setenv("APPDATA", filepath.Join(hostile, "AppData", "Roaming"))
 	previousVersionRunner := opencoderuntime.VersionRunnerOverride
 	opencoderuntime.VersionRunnerOverride = func(context.Context, opencoderuntime.Command) (opencoderuntime.CommandOutput, error) {
 		return opencoderuntime.CommandOutput{}, exec.ErrNotFound

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -160,9 +159,6 @@ func TestPersonaSelectedSettingsRejectsDirectoryBeforePromptMutation(t *testing.
 }
 
 func TestPersonaSelectedSettingsRefusesLockedModeBeforePromptMutation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file permission bits are not supported on Windows")
-	}
 	home := t.TempDir()
 	path := filepath.Join(home, "opencode.jsonc")
 	original := []byte("{\"agent\":{}}\n")
@@ -2395,9 +2391,6 @@ func TestPersonaSelectedSettingsPreservePrivateMode(t *testing.T) {
 			}
 			if _, err := InjectAtSettingsPath(home, opencodeAdapter(), persona, path); err != nil {
 				t.Fatal(err)
-			}
-			if runtime.GOOS == "windows" {
-				return // POSIX permission bits are not preserved on Windows.
 			}
 			info, err := os.Stat(path)
 			if err != nil || info.Mode().Perm() != 0o600 {

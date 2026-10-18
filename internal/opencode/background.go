@@ -281,9 +281,6 @@ func RunVersion(target string) (string, error) {
 // ActivationOptions supplies platform and process seams for activation. Zero
 // values use the current process and the real system PATH implementation.
 type ActivationOptions struct {
-	// OS is ignored: the fork supports only darwin/arm64. It remains until
-	// its internal/cli callers drop it.
-	OS   string
 	Path string
 	// Shell is the user's login shell; it selects the login profile that
 	// persists the managed bin directory on POSIX. Defaults to $SHELL.
@@ -293,15 +290,9 @@ type ActivationOptions struct {
 	RunVersion         VersionRunner
 	AddToUserPath      func(string) error
 	RemoveFromUserPath func(string) error
-	// AddToUserPathWithResult is ignored; it remains until its internal/cli
-	// test caller drops it.
-	AddToUserPathWithResult func(string) (system.UserPathAddition, error)
-	ResolveTarget           func(homeDir, goos, pathValue string) (string, error)
-	WriteFile               func(path string, content []byte, mode os.FileMode) error
-	RemoveFile              func(path string) error
-	// NewShellPath is ignored: readiness is modeled from login startup files.
-	// It remains until its internal/cli test caller drops it.
-	NewShellPath func() (string, error)
+	ResolveTarget      func(homeDir, pathValue string) (string, error)
+	WriteFile          func(path string, content []byte, mode os.FileMode) error
+	RemoveFile         func(path string) error
 }
 
 func (o ActivationOptions) normalized() ActivationOptions {
@@ -363,26 +354,19 @@ func BinDir(homeDir string) string { return filepath.Join(homeDir, ".gentle-ai",
 // POSIXLauncherPath returns the POSIX launcher path.
 func POSIXLauncherPath(homeDir string) string { return filepath.Join(BinDir(homeDir), "opencode") }
 
-// WindowsCMDPath is unused by this package and remains only until its
-// internal/cli test caller drops it.
-func WindowsCMDPath(homeDir string) string { return filepath.Join(BinDir(homeDir), "opencode.cmd") }
-
-// ManagedLauncherPaths returns the managed launcher files. The goos argument
-// is ignored (darwin/arm64 only) and remains until internal/cli drops it.
-func ManagedLauncherPaths(homeDir, _ string) []string {
+// ManagedLauncherPaths returns the managed launcher files.
+func ManagedLauncherPaths(homeDir string) []string {
 	return []string{POSIXLauncherPath(homeDir)}
 }
 
 // LauncherPaths is an alias with a concise name for callers that already know
 // they are asking for Gentle-owned paths.
-func LauncherPaths(homeDir, goos string) []string { return ManagedLauncherPaths(homeDir, goos) }
+func LauncherPaths(homeDir string) []string { return ManagedLauncherPaths(homeDir) }
 
 // ResolveTarget finds a stable OpenCode executable path outside the Gentle-owned
 // bin directory. Physical targets are checked for recursion, but executable
 // symlinks are preserved so package-manager upgrades do not invalidate launchers.
-// The goos argument is ignored (darwin/arm64 only) and remains until
-// internal/cli drops it.
-func ResolveTarget(homeDir, _, pathValue string) (string, error) {
+func ResolveTarget(homeDir, pathValue string) (string, error) {
 	managedDir, err := filepath.Abs(BinDir(homeDir))
 	if err != nil {
 		return "", fmt.Errorf("resolve managed OpenCode bin directory: %w", err)
@@ -489,7 +473,7 @@ type ActivationPlan struct {
 // typed foreground result rather than writing an unsafe launcher.
 func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPlan, error) {
 	options = options.normalized()
-	paths := ManagedLauncherPaths(homeDir, options.OS)
+	paths := ManagedLauncherPaths(homeDir)
 	plan := &ActivationPlan{
 		homeDir: homeDir,
 		options: options,
@@ -499,7 +483,7 @@ func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPl
 		before:  make(map[string]launcherSnapshot, len(paths)),
 	}
 
-	target, targetErr := options.ResolveTarget(homeDir, options.OS, options.Path)
+	target, targetErr := options.ResolveTarget(homeDir, options.Path)
 	if targetErr != nil {
 		plan.capability = CapabilityResolution{
 			Status: CapabilityUnknown,
@@ -539,7 +523,7 @@ func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPl
 // safe even when the real runtime is no longer installed.
 func PrepareDeactivation(homeDir string, options ActivationOptions) (*ActivationPlan, error) {
 	options = options.normalized()
-	paths := ManagedLauncherPaths(homeDir, options.OS)
+	paths := ManagedLauncherPaths(homeDir)
 	plan := &ActivationPlan{
 		homeDir: homeDir,
 		options: options,

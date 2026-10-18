@@ -26,7 +26,7 @@ func TestPOSIXActivationPersistsManagedProfileBlockAndDeactivationRemovesIt(t *t
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 
 	first, err := Activate(home, options)
@@ -95,7 +95,7 @@ func profileTestOptions(t *testing.T, shell string) ActivationOptions {
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 }
 

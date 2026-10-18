@@ -146,7 +146,7 @@ func brokenManagedLauncherFallback() (string, bool) {
 	if err != nil || !IsManagedLauncher(launcher, data) {
 		return "", false
 	}
-	target, err := ResolveTarget(home, "", os.Getenv("PATH"))
+	target, err := ResolveTarget(home, os.Getenv("PATH"))
 	return target, err == nil
 }
 

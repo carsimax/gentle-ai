@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -16,9 +15,6 @@ func setupPiSyncHost(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	if runtime.GOOS == "windows" {
-		t.Setenv("USERPROFILE", home)
-	}
 	t.Setenv("PI_CODING_AGENT_DIR", "")
 	t.Chdir(t.TempDir())
 

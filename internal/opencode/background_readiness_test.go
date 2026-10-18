@@ -33,7 +33,7 @@ func newReadinessFixture(t *testing.T, shell string) readinessFixture {
 			Path:          "/usr/bin:/bin",
 			RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 			AddToUserPath: func(string) error { return nil },
-			ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+			ResolveTarget: func(string, string) (string, error) { return target, nil },
 		},
 	}
 }
@@ -191,14 +191,14 @@ func TestResolveManagedLauncherRequiresFirstOwnedExecutable(t *testing.T) {
 	writeExecutable(t, other, "real")
 	writeExecutable(t, launcher, posixLauncher(other))
 	binDir := BinDir(home)
-	if got, err := ResolveManagedLauncher(home, binDir+":"+filepath.Dir(other), ""); err != nil || got != launcher {
+	if got, err := ResolveManagedLauncher(home, binDir+":"+filepath.Dir(other)); err != nil || got != launcher {
 		t.Fatalf("ResolveManagedLauncher(managed first) = %q, %v; want %q", got, err, launcher)
 	}
-	if _, err := ResolveManagedLauncher(home, filepath.Dir(other)+":"+binDir, ""); err == nil || !strings.Contains(err.Error(), other) {
+	if _, err := ResolveManagedLauncher(home, filepath.Dir(other)+":"+binDir); err == nil || !strings.Contains(err.Error(), other) {
 		t.Fatalf("ResolveManagedLauncher(shadowed) error = %v, want shadowing executable named", err)
 	}
 	writeExecutable(t, launcher, "#!/bin/sh\n# "+OwnershipMarker+"\nexec /bin/true\n")
-	if _, err := ResolveManagedLauncher(home, binDir, ""); err == nil || !strings.Contains(err.Error(), "not Gentle-owned") {
+	if _, err := ResolveManagedLauncher(home, binDir); err == nil || !strings.Contains(err.Error(), "not Gentle-owned") {
 		t.Fatalf("ResolveManagedLauncher(user file) error = %v, want ownership refusal", err)
 	}
 }

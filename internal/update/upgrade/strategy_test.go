@@ -1209,7 +1209,7 @@ func TestEngramBinaryUpgrade_StableChannelCallsDownloadFn(t *testing.T) {
 // TestEngramBinaryUpgrade_BetaChannelUsesGoInstallMain verifies that when
 // GENTLE_AI_CHANNEL=beta, engramBinaryUpgrade delegates to
 // engramBetaInstallFn (the consolidated beta path, backed by
-// engram.DownloadLatestBinary(profile, true) in production). The stable
+// engram.DownloadLatestBinary(true) in production). The stable
 // engramDownloadFn must NOT be called.
 func TestEngramBinaryUpgrade_BetaChannelUsesGoInstallMain(t *testing.T) {
 	t.Setenv("GENTLE_AI_CHANNEL", "beta")

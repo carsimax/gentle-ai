@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/engram"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/doctor"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/opencode"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
 // --- checkOneTool ---
@@ -45,9 +43,6 @@ func TestCheckOneTool_ShadowedBinary(t *testing.T) {
 	stubDoctorToolProbe(t)
 	orig := lookPathFn
 	defer func() { lookPathFn = orig }()
-	origExts := executableExtsFn
-	defer func() { executableExtsFn = origExts }()
-	executableExtsFn = func() []string { return []string{""} }
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
@@ -83,9 +78,6 @@ func TestCheckOneTool_ShadowedBinary(t *testing.T) {
 }
 
 func TestDoctorToolCopies_DeduplicatesSymlinkedPathDirectories(t *testing.T) {
-	origExts := executableExtsFn
-	defer func() { executableExtsFn = origExts }()
-	executableExtsFn = func() []string { return []string{""} }
 
 	root := t.TempDir()
 	usrBin := filepath.Join(root, "usr", "bin")
@@ -115,9 +107,6 @@ func TestCheckOneTool_OK(t *testing.T) {
 	stubDoctorToolProbe(t)
 	orig := lookPathFn
 	defer func() { lookPathFn = orig }()
-	origExts := executableExtsFn
-	defer func() { executableExtsFn = origExts }()
-	executableExtsFn = func() []string { return []string{""} }
 
 	dir := t.TempDir()
 	f, err := os.Create(filepath.Join(dir, "engram"))
@@ -132,172 +121,6 @@ func TestCheckOneTool_OK(t *testing.T) {
 
 	if got.Status != CheckStatusPass {
 		t.Errorf("expected pass, got %s: %s", got.Status, got.Detail)
-	}
-}
-
-// TestCheckOneTool_ShadowedWindowsExt reproduces the Windows bug: binaries on
-// disk carry an executable extension (e.g. gentle-ai.exe / gentle-ai.cmd), so a
-// bare-name scan misses them and shadowing is reported as [ok]. With PATHEXT
-// extensions the duplicate copies are detected and a warning is produced.
-func TestCheckOneTool_ShadowedWindowsExt(t *testing.T) {
-	stubDoctorToolProbe(t)
-	origLook := lookPathFn
-	origGOOS := doctorGOOS
-	origExts := executableExtsFn
-	defer func() {
-		lookPathFn = origLook
-		doctorGOOS = origGOOS
-		executableExtsFn = origExts
-	}()
-	doctorGOOS = "windows"
-	executableExtsFn = func() []string { return []string{".exe", ".cmd"} }
-
-	dir1 := t.TempDir()
-	dir2 := t.TempDir()
-	for _, p := range []string{filepath.Join(dir1, "gentle-ai.exe"), filepath.Join(dir2, "gentle-ai.cmd")} {
-		f, err := os.Create(p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		_ = f.Close()
-	}
-
-	lookPathFn = func(string) (string, error) { return filepath.Join(dir1, "gentle-ai.exe"), nil }
-
-	got := checkOneTool("gentle-ai", []string{dir1, dir2})
-
-	if got.Status != CheckStatusWarn {
-		t.Fatalf("expected warn for extensioned shadow, got %s: %s", got.Status, got.Detail)
-	}
-	if !strings.Contains(got.Detail, "2 copies found") {
-		t.Errorf("unexpected detail: %s", got.Detail)
-	}
-}
-
-func TestCheckOneTool_WindowsPowerShellShimFallback(t *testing.T) {
-	stubDoctorToolProbe(t)
-	origLook := lookPathFn
-	origGOOS := doctorGOOS
-	origExts := executableExtsFn
-	defer func() {
-		lookPathFn = origLook
-		doctorGOOS = origGOOS
-		executableExtsFn = origExts
-	}()
-	doctorGOOS = "windows"
-	executableExtsFn = func() []string { return []string{".exe", ".cmd"} }
-
-	dir := t.TempDir()
-	ps1Path := filepath.Join(dir, "gga.ps1")
-	if err := os.WriteFile(ps1Path, []byte("fake"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	lookPathFn = func(file string) (string, error) {
-		if file == "gga.ps1" {
-			return ps1Path, nil
-		}
-		return "", errors.New("not found")
-	}
-
-	got := checkOneTool("gga", []string{dir})
-
-	if got.Status != CheckStatusPass {
-		t.Fatalf("expected pass, got %s: %s", got.Status, got.Detail)
-	}
-	if !strings.Contains(got.Detail, "PowerShell shim") {
-		t.Fatalf("expected PowerShell shim detail, got %q", got.Detail)
-	}
-}
-
-func TestCheckOneTool_WindowsShimVariantsInSameDirAreNotDuplicates(t *testing.T) {
-	stubDoctorToolProbe(t)
-	origLook := lookPathFn
-	origGOOS := doctorGOOS
-	origExts := executableExtsFn
-	defer func() {
-		lookPathFn = origLook
-		doctorGOOS = origGOOS
-		executableExtsFn = origExts
-	}()
-	doctorGOOS = "windows"
-	executableExtsFn = func() []string { return []string{".cmd"} }
-
-	dir := t.TempDir()
-	cmdPath := filepath.Join(dir, "gga.cmd")
-	for _, path := range []string{cmdPath, filepath.Join(dir, "gga.ps1")} {
-		if err := os.WriteFile(path, []byte("fake"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	lookPathFn = func(file string) (string, error) {
-		if file == "gga" {
-			return cmdPath, nil
-		}
-		return "", errors.New("not found")
-	}
-
-	got := checkOneTool("gga", []string{dir})
-
-	if got.Status != CheckStatusPass {
-		t.Fatalf("expected pass for same-directory shim variants, got %s: %s", got.Status, got.Detail)
-	}
-}
-
-// TestExecutableExtensions verifies the per-platform extension set.
-func TestExecutableExtensions(t *testing.T) {
-	exts := executableExtensions()
-	if len(exts) == 0 {
-		t.Fatal("expected at least one extension")
-	}
-	if runtime.GOOS == "windows" {
-		var hasExe bool
-		for _, e := range exts {
-			if e == ".exe" {
-				hasExe = true
-			}
-		}
-		if !hasExe {
-			t.Errorf("expected .exe among Windows extensions, got %v", exts)
-		}
-	} else if len(exts) != 1 || exts[0] != "" {
-		t.Errorf(`expected [""] on non-Windows, got %v`, exts)
-	}
-}
-
-func TestExecutableExtensionsFor(t *testing.T) {
-	tests := []struct {
-		name    string
-		goos    string
-		pathext string
-		want    []string
-	}{
-		{
-			name: "non-windows uses bare name",
-			goos: "darwin",
-			want: []string{""},
-		},
-		{
-			name: "windows default PATHEXT",
-			goos: "windows",
-			want: []string{".com", ".exe", ".bat", ".cmd"},
-		},
-		{
-			name:    "windows normalizes PATHEXT case and missing dots",
-			goos:    "windows",
-			pathext: "EXE;.Cmd; ;BAT",
-			want:    []string{".exe", ".cmd", ".bat"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := executableExtensionsFor(tt.goos, tt.pathext)
-			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
-				t.Fatalf("got %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 
@@ -385,14 +208,7 @@ func TestCheckStateJSON_ManagedConfigPathUnreadable(t *testing.T) {
 		t.Fatalf("expected warn for unreadable managed config path, got %s: %s", got.Status, got.Detail)
 	}
 	wants := []string{configPath, "inspect or repair", "gentle-ai doctor"}
-	if runtime.GOOS == "windows" {
-		// Windows reports a file-blocked path as not-exist, so the warn is
-		// produced by the ancestor walk naming the blocking file rather than
-		// by forwarding the final lstat error.
-		wants = append(wants, configRoot)
-	} else {
-		wants = append(wants, statErr.Error())
-	}
+	wants = append(wants, statErr.Error())
 	for _, want := range wants {
 		if !strings.Contains(got.Detail, want) {
 			t.Fatalf("unreadable path result missing %q: %s", want, got.Detail)
@@ -1177,16 +993,13 @@ func TestRunDoctor_HomeDirError(t *testing.T) {
 // Issue #3452: doctor reports whether new login shells will find the managed
 // OpenCode launcher directory.
 func TestCheckOpenCodeProfileReportsPersistence(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login shells are not used on Windows")
-	}
 	// The check reads the profile the current login shell uses.
 	t.Setenv("SHELL", "/bin/sh")
 	t.Setenv("ZDOTDIR", "")
 	home := t.TempDir()
 	binDir := opencode.BinDir(home)
 	// Background on implies a written launcher; persistence is what varies.
-	activateDoctorLauncher(t, home, "linux", "")
+	activateDoctorLauncher(t, home, "")
 	if _, err := opencode.RemoveManagedProfileBlock(filepath.Join(home, ".profile")); err != nil {
 		t.Fatal(err)
 	}
@@ -1222,13 +1035,10 @@ func TestCheckOpenCodeProfileReportsPersistence(t *testing.T) {
 // profile, so new shells resolve the real binary before the launcher even
 // though the profile block is present. Doctor must not report it healthy.
 func TestCheckOpenCodeProfileReportsRcFileShadowing(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login shells are not used on Windows")
-	}
 	t.Setenv("SHELL", "/bin/zsh")
 	t.Setenv("ZDOTDIR", "")
 	home := t.TempDir()
-	real := activateDoctorLauncher(t, home, "linux", "")
+	real := activateDoctorLauncher(t, home, "")
 	zshrc := filepath.Join(home, ".zshrc")
 	if err := os.WriteFile(zshrc, []byte("# opencode\nexport PATH="+filepath.Dir(real)+":$PATH\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -1243,16 +1053,12 @@ func TestCheckOpenCodeProfileReportsRcFileShadowing(t *testing.T) {
 	}
 }
 
-// activateDoctorLauncher writes a real managed launcher for goos into home and
+// activateDoctorLauncher writes a real managed launcher into home and
 // returns the real OpenCode target it delegates to. targetOverride names a
-// target string that differs from the on-disk file (e.g. Windows casing).
-func activateDoctorLauncher(t *testing.T, home, goos, targetOverride string) string {
+// target string that differs from the on-disk file.
+func activateDoctorLauncher(t *testing.T, home, targetOverride string) string {
 	t.Helper()
-	name := "opencode"
-	if goos == "windows" {
-		name = "opencode.cmd"
-	}
-	real := filepath.Join(home, ".opencode", "bin", name)
+	real := filepath.Join(home, ".opencode", "bin", "opencode")
 	if err := os.MkdirAll(filepath.Dir(real), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1264,13 +1070,10 @@ func activateDoctorLauncher(t *testing.T, home, goos, targetOverride string) str
 		target = targetOverride
 	}
 	plan, err := opencode.PrepareActivation(home, opencode.ActivationOptions{
-		OS:                      goos,
-		Path:                    filepath.Dir(real),
-		RunVersion:              func(string) (string, error) { return "1.15.11", nil },
-		AddToUserPath:           func(string) error { return nil },
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) { return system.UserPathAddition{}, nil },
-		ResolveTarget:           func(string, string, string) (string, error) { return target, nil },
-		NewShellPath:            func() (string, error) { return opencode.BinDir(home), nil },
+		Path:          filepath.Dir(real),
+		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
+		AddToUserPath: func(string) error { return nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1285,22 +1088,17 @@ func activateDoctorLauncher(t *testing.T, home, goos, targetOverride string) str
 // activation chain, not duplicate installations; genuine extra copies still warn.
 func TestCheckOneToolTreatsManagedLauncherAndTargetAsOneInstallation(t *testing.T) {
 	stubDoctorToolProbe(t)
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX execute bits are not used on Windows")
-	}
-	origLook, origGOOS, origExts, origHome := lookPathFn, doctorGOOS, executableExtsFn, osUserHomeDirDoctor
+	origLook, origHome := lookPathFn, osUserHomeDirDoctor
 	t.Cleanup(func() {
-		lookPathFn, doctorGOOS, executableExtsFn, osUserHomeDirDoctor = origLook, origGOOS, origExts, origHome
+		lookPathFn, osUserHomeDirDoctor = origLook, origHome
 	})
 	t.Setenv("SHELL", "/bin/sh")
 	t.Setenv("ZDOTDIR", "")
 
 	t.Run("posix launcher and direct target", func(t *testing.T) {
-		doctorGOOS = "linux"
-		executableExtsFn = func() []string { return []string{""} }
 		home := t.TempDir()
 		osUserHomeDirDoctor = func() (string, error) { return home, nil }
-		real := activateDoctorLauncher(t, home, "linux", "")
+		real := activateDoctorLauncher(t, home, "")
 		launcher := opencode.POSIXLauncherPath(home)
 		lookPathFn = func(string) (string, error) { return launcher, nil }
 		dirs := []string{opencode.BinDir(home), filepath.Dir(real)}
@@ -1319,11 +1117,9 @@ func TestCheckOneToolTreatsManagedLauncherAndTargetAsOneInstallation(t *testing.
 	})
 
 	t.Run("posix target reached through package-manager symlink", func(t *testing.T) {
-		doctorGOOS = "linux"
-		executableExtsFn = func() []string { return []string{""} }
 		home := t.TempDir()
 		osUserHomeDirDoctor = func() (string, error) { return home, nil }
-		real := activateDoctorLauncher(t, home, "linux", "")
+		real := activateDoctorLauncher(t, home, "")
 		globalBin := t.TempDir()
 		if err := os.Symlink(real, filepath.Join(globalBin, "opencode")); err != nil {
 			t.Skipf("symlink creation unavailable: %v", err)
@@ -1334,48 +1130,18 @@ func TestCheckOneToolTreatsManagedLauncherAndTargetAsOneInstallation(t *testing.
 		}
 	})
 
-	t.Run("windows cmd launcher and pnpm target with different casing", func(t *testing.T) {
-		doctorGOOS = "windows"
-		executableExtsFn = func() []string { return []string{".exe", ".cmd"} }
-		home := t.TempDir()
-		osUserHomeDirDoctor = func() (string, error) { return home, nil }
-		pnpm := filepath.Join(home, ".opencode", "bin")
-		real := activateDoctorLauncher(t, home, "windows", filepath.Join(pnpm, "opencode.CMD"))
-		lookPathFn = func(string) (string, error) { return opencode.WindowsCMDPath(home), nil }
-		if got := checkOneTool("opencode", []string{opencode.BinDir(home), filepath.Dir(real)}); got.Status != CheckStatusPass {
-			t.Fatalf("windows launcher chain = %#v, want pass", got)
-		}
-	})
-
 	// A target that precedes its launcher on PATH bypasses the launcher: that is
-	// shadowing, not one installation (e.g. a Windows machine PATH entry from
-	// choco or winget ahead of the user PATH).
+	// shadowing, not one installation.
 	t.Run("posix target before launcher is shadowing", func(t *testing.T) {
-		doctorGOOS = "linux"
-		executableExtsFn = func() []string { return []string{""} }
 		home := t.TempDir()
 		osUserHomeDirDoctor = func() (string, error) { return home, nil }
-		real := activateDoctorLauncher(t, home, "linux", "")
+		real := activateDoctorLauncher(t, home, "")
 		lookPathFn = func(string) (string, error) { return real, nil }
 		got := checkOneTool("opencode", []string{filepath.Dir(real), opencode.BinDir(home)})
 		assertLauncherShadowed(t, got, real, opencode.POSIXLauncherPath(home), opencode.BinDir(home))
 	})
 
-	t.Run("windows target before launcher is shadowing", func(t *testing.T) {
-		doctorGOOS = "windows"
-		executableExtsFn = func() []string { return []string{".exe", ".cmd"} }
-		home := t.TempDir()
-		osUserHomeDirDoctor = func() (string, error) { return home, nil }
-		pnpm := filepath.Join(home, ".opencode", "bin")
-		real := activateDoctorLauncher(t, home, "windows", filepath.Join(pnpm, "opencode.CMD"))
-		lookPathFn = func(string) (string, error) { return real, nil }
-		got := checkOneTool("opencode", []string{filepath.Dir(real), opencode.BinDir(home)})
-		assertLauncherShadowed(t, got, real, opencode.WindowsCMDPath(home), opencode.BinDir(home))
-	})
-
 	t.Run("marker-only file is not a managed launcher", func(t *testing.T) {
-		doctorGOOS = "linux"
-		executableExtsFn = func() []string { return []string{""} }
 		home := t.TempDir()
 		osUserHomeDirDoctor = func() (string, error) { return home, nil }
 		real := filepath.Join(t.TempDir(), "opencode")
@@ -1409,13 +1175,10 @@ func assertLauncherShadowed(t *testing.T, got CheckResult, target, launcher, bin
 // A shell whose startup cannot be modeled is informational: warn with
 // guidance, never fail.
 func TestCheckOpenCodeProfileUnverifiableShellWarnsWithGuidance(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login shells are not used on Windows")
-	}
 	t.Setenv("SHELL", "/usr/bin/fish")
 	t.Setenv("ZDOTDIR", "")
 	home := t.TempDir()
-	activateDoctorLauncher(t, home, "linux", "")
+	activateDoctorLauncher(t, home, "")
 	got := checkOpenCodeProfile(home, []string{opencode.BinDir(home), "/usr/bin"})
 	if got.Status != CheckStatusWarn || !strings.Contains(got.Detail, "could not verify") {
 		t.Fatalf("unverifiable shell = %#v, want informational warn", got)
@@ -1433,7 +1196,6 @@ func TestRunDoctorAddsOpenCodeProfileCheckOnlyWhenBackgroundIsOn(t *testing.T) {
 	origPathDirs := pathDirsFn
 	origHomeDir := osUserHomeDirDoctor
 	origExecutable := osExecutableDoctor
-	origGOOS := doctorGOOS
 	t.Cleanup(func() {
 		lookPathFn = origLookPath
 		availableBytesFn = origAvail
@@ -1441,7 +1203,6 @@ func TestRunDoctorAddsOpenCodeProfileCheckOnlyWhenBackgroundIsOn(t *testing.T) {
 		pathDirsFn = origPathDirs
 		osUserHomeDirDoctor = origHomeDir
 		osExecutableDoctor = origExecutable
-		doctorGOOS = origGOOS
 	})
 	lookPathFn = func(name string) (string, error) { return "/usr/local/bin/" + name, nil }
 	availableBytesFn = func(string) (int64, error) { return 1024 * 1024 * 1024, nil }
@@ -1453,16 +1214,13 @@ func TestRunDoctorAddsOpenCodeProfileCheckOnlyWhenBackgroundIsOn(t *testing.T) {
 
 	for _, tt := range []struct {
 		name      string
-		goos      string
 		payload   string
 		wantCheck bool
 	}{
-		{name: "background on", goos: "linux", payload: `{"installed_agents":["opencode"],"opencode_background_subagents":"on"}`, wantCheck: true},
-		{name: "background off", goos: "linux", payload: `{"installed_agents":["opencode"],"opencode_background_subagents":"off"}`},
-		{name: "windows uses user PATH", goos: "windows", payload: `{"installed_agents":["opencode"],"opencode_background_subagents":"on"}`},
+		{name: "background on", payload: `{"installed_agents":["opencode"],"opencode_background_subagents":"on"}`, wantCheck: true},
+		{name: "background off", payload: `{"installed_agents":["opencode"],"opencode_background_subagents":"off"}`},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			doctorGOOS = tt.goos
 			homeDir := t.TempDir()
 			if err := os.MkdirAll(filepath.Join(homeDir, ".gentle-ai"), 0o755); err != nil {
 				t.Fatal(err)
@@ -1490,14 +1248,9 @@ func TestRunDoctorAddsOpenCodeProfileCheckOnlyWhenBackgroundIsOn(t *testing.T) {
 func TestCheckToolBinaries_DerivesAgentsFromInstalled(t *testing.T) {
 	stubDoctorToolProbe(t)
 	orig := lookPathFn
-	origGOOS := doctorGOOS
 	defer func() {
 		lookPathFn = orig
-		doctorGOOS = origGOOS
 	}()
-	// Pin to a non-Windows platform so the PowerShell-shim fallback in
-	// resolveDoctorTool does not mask a missing binary.
-	doctorGOOS = "darwin"
 	lookPathFn = func(name string) (string, error) {
 		if name == "claude" {
 			return "", errors.New("not found")
@@ -1594,15 +1347,9 @@ func TestCheckToolBinaries_StateMissing_ChecksCoreOnly(t *testing.T) {
 func TestCheckOneTool_DirectoryWithToolName_NotCountedAsDuplicate(t *testing.T) {
 	stubDoctorToolProbe(t)
 	orig := lookPathFn
-	origExts := executableExtsFn
-	origGOOS := doctorGOOS
 	defer func() {
 		lookPathFn = orig
-		executableExtsFn = origExts
-		doctorGOOS = origGOOS
 	}()
-	doctorGOOS = "darwin"
-	executableExtsFn = func() []string { return []string{""} }
 
 	dirWithFile := t.TempDir()
 	dirWithDir := t.TempDir()
@@ -1634,20 +1381,11 @@ func TestCheckOneTool_DirectoryWithToolName_NotCountedAsDuplicate(t *testing.T) 
 // non-executable files were still flagged as duplicates.
 func TestCheckOneTool_FileWithoutExecBit_NotCountedAsDuplicate(t *testing.T) {
 	stubDoctorToolProbe(t)
-	if runtime.GOOS == "windows" {
-		t.Skip("Unix execute-bit semantics do not apply on Windows")
-	}
 
 	orig := lookPathFn
-	origExts := executableExtsFn
-	origGOOS := doctorGOOS
 	defer func() {
 		lookPathFn = orig
-		executableExtsFn = origExts
-		doctorGOOS = origGOOS
 	}()
-	doctorGOOS = "darwin"
-	executableExtsFn = func() []string { return []string{""} }
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
@@ -1683,19 +1421,13 @@ func TestRunDoctor_OnlySelectedAgentsAreRequired(t *testing.T) {
 	origHTTP := httpGetFn
 	origPath := pathDirsFn
 	origHome := osUserHomeDirDoctor
-	origGOOS := doctorGOOS
-	origExts := executableExtsFn
 	defer func() {
 		lookPathFn = origLook
 		availableBytesFn = origAvail
 		httpGetFn = origHTTP
 		pathDirsFn = origPath
 		osUserHomeDirDoctor = origHome
-		doctorGOOS = origGOOS
-		executableExtsFn = origExts
 	}()
-	doctorGOOS = "darwin"
-	executableExtsFn = func() []string { return []string{""} }
 
 	homeDir := t.TempDir()
 	stateDir := filepath.Join(homeDir, ".gentle-ai")

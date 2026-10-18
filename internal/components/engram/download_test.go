@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/testenv"
 )
 
@@ -129,8 +128,7 @@ func TestDownloadLatestBinary(t *testing.T) {
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary() error = %v", err)
 	}
@@ -170,8 +168,7 @@ func TestDownloadLatestBinaryDownloadError(t *testing.T) {
 		engramGitHubBaseURL = origBaseURL
 	})
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	_, err := DownloadLatestBinary(profile, false)
+	_, err := DownloadLatestBinary(false)
 	if err == nil {
 		t.Fatal("expected error when GitHub API returns 500, got nil")
 	}
@@ -244,8 +241,7 @@ func TestDownloadLatestBinarySkipsLatestReleaseWithoutBinaryAssets(t *testing.T)
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary() error = %v", err)
 	}
@@ -326,8 +322,7 @@ func TestDownloadLatestBinaryReleaseListFallsBackToAnonymousWhenTokenGets403(t *
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary() error = %v", err)
 	}
@@ -419,8 +414,7 @@ func TestDownloadLatestBinaryIgnoresGentleEngramAndPiTags(t *testing.T) {
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary() error = %v, want core engram v%s to be selected", err, binaryVersion)
 	}
@@ -516,8 +510,7 @@ func TestEngramChecksumVerification(t *testing.T) {
 			engramInstallDirFn = func() string { return tmpDir }
 			t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-			profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-			_, err := DownloadLatestBinary(profile, false)
+			_, err := DownloadLatestBinary(false)
 
 			if tt.wantErrSubstr == "" {
 				if err != nil {
@@ -645,8 +638,7 @@ func TestFetchLatestEngramVersionWithAssetsPaginates(t *testing.T) {
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary() error = %v, want core engram v%s selected from page 2", err, binaryVersion)
 	}
@@ -754,9 +746,8 @@ func TestDownloadLatestBinary_StableChannelUsesRelease(t *testing.T) {
 	engramInstallDirFn = func() string { return tmpDir }
 	t.Cleanup(func() { engramInstallDirFn = origInstallDirFn })
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
 	// isBeta=false → should use the release download path.
-	installedPath, err := DownloadLatestBinary(profile, false)
+	installedPath, err := DownloadLatestBinary(false)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary(stable): unexpected error: %v", err)
 	}
@@ -782,9 +773,8 @@ func TestDownloadLatestBinary_BetaChannelUsesGoInstallMain(t *testing.T) {
 		return "/tmp/engram-beta", nil
 	}
 
-	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
 	// isBeta=true → should use go install @main, not release download.
-	installedPath, err := DownloadLatestBinary(profile, true)
+	installedPath, err := DownloadLatestBinary(true)
 	if err != nil {
 		t.Fatalf("DownloadLatestBinary(beta): unexpected error: %v", err)
 	}

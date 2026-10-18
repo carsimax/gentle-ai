@@ -31,7 +31,7 @@ func TestManagedLauncherSurvivesTargetUpgrade(t *testing.T) {
 	}
 	stable := filepath.Join(bin, name)
 	mustSymlink(t, oldTarget, stable)
-	target, err := ResolveTarget(home, "", bin)
+	target, err := ResolveTarget(home, bin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestResolveTargetRejectsAliasToManagedLauncher(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustSymlink(t, managed, filepath.Join(aliasDir, name))
-	if target, err := ResolveTarget(home, "", aliasDir); err == nil {
+	if target, err := ResolveTarget(home, aliasDir); err == nil {
 		t.Fatalf("managed alias accepted: %q", target)
 	}
 }

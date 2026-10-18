@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -81,9 +80,6 @@ func TestPortableHomebrewComponentPipeline(t *testing.T) {
 	}
 	bin := t.TempDir()
 	name := "brew"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
 	brew := filepath.Join(bin, name)
 	src, err := os.Open(self)
 	if err != nil {

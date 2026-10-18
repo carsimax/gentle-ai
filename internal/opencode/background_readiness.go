@@ -864,10 +864,8 @@ func shellWords(command string) []string {
 // ResolveManagedLauncher resolves the first OpenCode executable in pathValue
 // with exec.LookPath's PATH semantics, without consulting the process PATH,
 // and verifies it is a Gentle-owned launcher in the managed bin directory.
-// A different executable first wraps ErrManagedLauncherShadowed. The goos
-// argument is ignored (darwin/arm64 only) and remains until internal/cli
-// drops it.
-func ResolveManagedLauncher(homeDir, pathValue, _ string) (string, error) {
+// A different executable first wraps ErrManagedLauncherShadowed.
+func ResolveManagedLauncher(homeDir, pathValue string) (string, error) {
 	return resolveManagedLauncher(homeDir, pathValue, false)
 }
 

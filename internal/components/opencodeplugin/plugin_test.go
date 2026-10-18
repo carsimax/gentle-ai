@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -199,9 +198,6 @@ func TestInstallGentleLogoRestoresPreExistingSourceWhenRegistrationFails(t *test
 }
 
 func TestPriorFileRestoreReportsRemovalFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory permissions do not deny file removal on windows")
-	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory permissions")
 	}
@@ -245,12 +241,6 @@ func assertRestoredSourceMode(t *testing.T, path string, original os.FileMode) {
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if runtime.GOOS == "windows" {
-		if got := info.Mode().Perm(); got != original.Perm() {
-			t.Fatalf("plugin source mode = %o, want preserved %o", got, original.Perm())
-		}
-		return
 	}
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Fatalf("plugin source mode = %o, want 600", got)
@@ -399,9 +389,6 @@ func TestInstallGentleLogoRollsBackTUIRegistrationWhenItLandsWithError(t *testin
 // failure and the rollback failure via errors.Join, and states that the
 // previous state could not be restored.
 func TestInstallGentleLogoReportsRollbackFailureInErrorChain(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("directory permissions do not deny file removal on windows")
-	}
 	if os.Geteuid() == 0 {
 		t.Skip("root bypasses directory permissions")
 	}

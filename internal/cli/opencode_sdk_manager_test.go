@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -57,9 +56,6 @@ const (
 func writeFakeNPM(t *testing.T, dir, posix, windows string) string {
 	t.Helper()
 	name, script := "npm", posix
-	if runtime.GOOS == "windows" {
-		name, script = "npm.cmd", strings.ReplaceAll(windows, "\n", "\r\n")
-	}
 	path := filepath.Join(dir, name)
 	if err := os.WriteFile(path, []byte(script), 0755); err != nil {
 		t.Fatal(err)
@@ -130,9 +126,6 @@ func TestV2SDKProposalRefusesVersionManagerShims(t *testing.T) {
 		{name: "missing interpreter", dir: "plain/bin", script: "#!/usr/bin/env gentle-ai-missing-interpreter\n", want: "interpreter", shebang: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.shebang && runtime.GOOS == "windows" {
-				t.Skip("shebang interpreter detection is POSIX-only")
-			}
 			home, config := freshV2SDKConfig(t)
 			root := t.TempDir()
 			installFakeNPM(t, filepath.Join(root, filepath.FromSlash(tc.dir)), tc.script, fakeNPMWindowsTouchInvoked)
@@ -164,9 +157,6 @@ func TestV2SDKProposalRefusesVersionManagerShims(t *testing.T) {
 }
 
 func TestOpenCodeSDKFailureClassNamesStartExitSignalAndDeadline(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses POSIX executables")
-	}
 	missing := exec.Command(filepath.Join(t.TempDir(), "missing-npm"))
 	startErr := missing.Run()
 	exitErr := exec.Command("/bin/sh", "-c", "exit 3").Run()

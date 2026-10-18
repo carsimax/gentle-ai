@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -683,9 +682,6 @@ func TestInstallPipelineDoesNotDuplicatePiPendingWhenSelected(t *testing.T) {
 }
 
 func TestPiCodeGraphMCPRuntimeClassification(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("fake CodeGraph runtime uses a POSIX script")
-	}
 	tests := []struct {
 		name    string
 		tools   string

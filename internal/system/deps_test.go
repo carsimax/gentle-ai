@@ -2,7 +2,6 @@ package system
 
 import (
 	"context"
-	"runtime"
 	"testing"
 )
 
@@ -112,17 +111,6 @@ func TestDefineDependenciesDarwin(t *testing.T) {
 	for _, dep := range deps {
 		if dep.Name == "brew" && dep.Required {
 			t.Fatalf("brew should be optional on darwin")
-		}
-	}
-}
-
-func TestDefineDependenciesLinuxNoBrew(t *testing.T) {
-	profile := PlatformProfile{OS: "linux", LinuxDistro: "ubuntu", PackageManager: "apt", Supported: true}
-	deps := defineDependencies(profile)
-
-	for _, dep := range deps {
-		if dep.Name == "brew" {
-			t.Fatalf("brew should not be in linux dependency list")
 		}
 	}
 }
@@ -246,10 +234,6 @@ func TestRenderDependencyReportMissing(t *testing.T) {
 func TestDetectSingleDepWithEchoTrue(t *testing.T) {
 	binary := "echo"
 	args := []string{"v1.0.0"}
-	if runtime.GOOS == "windows" {
-		binary = "cmd"
-		args = []string{"/c", "echo v1.0.0"}
-	}
 	dep := Dependency{
 		Name:      binary,
 		Required:  true,
@@ -282,10 +266,6 @@ func TestDetectSingleDepNonExistentBinary(t *testing.T) {
 func TestDetectSingleDepMinVersionFail(t *testing.T) {
 	binary := "echo"
 	args := []string{"v1.0.0"}
-	if runtime.GOOS == "windows" {
-		binary = "cmd"
-		args = []string{"/c", "echo v1.0.0"}
-	}
 	dep := Dependency{
 		Name:       binary,
 		Required:   true,

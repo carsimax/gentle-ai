@@ -26,7 +26,7 @@ func TestGGAAvailableDetectsViaLookPath(t *testing.T) {
 }
 
 // TestGGAAvailableDetectsViaLocalBin verifies that ggaAvailable returns true
-// when gga exists at ~/.local/bin/gga (default for install.sh on Linux/macOS).
+// when gga exists at ~/.local/bin/gga (default for install.sh on macOS).
 func TestGGAAvailableDetectsViaLocalBin(t *testing.T) {
 	tmpHome := t.TempDir()
 	localBin := filepath.Join(tmpHome, ".local", "bin")
@@ -49,7 +49,7 @@ func TestGGAAvailableDetectsViaLocalBin(t *testing.T) {
 		osStat = origStat
 	})
 
-	if !ggaAvailable(system.PlatformProfile{OS: "linux", PackageManager: "apt"}) {
+	if !ggaAvailable(system.PlatformProfile{OS: "darwin", PackageManager: "brew"}) {
 		t.Fatal("ggaAvailable() = false, want true when gga is at ~/.local/bin/gga")
 	}
 }
@@ -140,35 +140,5 @@ func TestGGAAvailableReturnsFalseWhenNotFound(t *testing.T) {
 
 	if ggaAvailable(system.PlatformProfile{OS: "darwin", PackageManager: "brew"}) {
 		t.Fatal("ggaAvailable() = true, want false when gga is not installed anywhere")
-	}
-}
-
-// TestGGAAvailableBrewPathsSkippedOnLinux verifies that the Homebrew-specific
-// paths (/opt/homebrew/bin/gga, /usr/local/bin/gga) are NOT checked on Linux
-// even if those paths happen to exist (they never exist there in practice, but
-// the guard ensures no cross-platform false positives).
-func TestGGAAvailableBrewPathsSkippedOnLinux(t *testing.T) {
-	origLookPath := cmdLookPath
-	origHomeDir := osUserHomeDir
-	origStat := osStat
-	cmdLookPath = func(file string) (string, error) { return "", os.ErrNotExist }
-	osUserHomeDir = func() (string, error) { return t.TempDir(), nil }
-
-	statCallCount := 0
-	osStat = func(name string) (os.FileInfo, error) {
-		if name == "/opt/homebrew/bin/gga" || name == "/usr/local/bin/gga" {
-			statCallCount++
-		}
-		return nil, os.ErrNotExist
-	}
-	t.Cleanup(func() {
-		cmdLookPath = origLookPath
-		osUserHomeDir = origHomeDir
-		osStat = origStat
-	})
-
-	ggaAvailable(system.PlatformProfile{OS: "linux", PackageManager: "apt"})
-	if statCallCount > 0 {
-		t.Fatalf("ggaAvailable() checked Homebrew paths on Linux (%d calls), expected 0", statCallCount)
 	}
 }

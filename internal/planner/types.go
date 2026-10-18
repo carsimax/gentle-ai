@@ -52,7 +52,6 @@ type AgentNote struct {
 
 type PlatformDecision struct {
 	OS             string
-	LinuxDistro    string
 	PackageManager string
 	Supported      bool
 }
@@ -60,7 +59,6 @@ type PlatformDecision struct {
 func PlatformDecisionFromProfile(profile system.PlatformProfile) PlatformDecision {
 	return PlatformDecision{
 		OS:             profile.OS,
-		LinuxDistro:    profile.LinuxDistro,
 		PackageManager: profile.PackageManager,
 		Supported:      profile.Supported,
 	}

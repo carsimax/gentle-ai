@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -66,9 +65,6 @@ func TestExitCodePreservesShellChildStatus(t *testing.T) {
 }
 
 func TestExitCodePreservesShellSignal(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX signal fixture")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := exec.CommandContext(ctx, "/bin/sh", "-c", "kill -TERM $$").Run()

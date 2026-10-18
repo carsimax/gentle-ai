@@ -1467,7 +1467,6 @@ func TestManagedAgentBackupPathsOpenCodePluginsFollowXDGConfigHome(t *testing.T)
 	homeDir := t.TempDir()
 	xdg := filepath.Join(homeDir, ".xdg")
 	t.Setenv("HOME", homeDir)
-	t.Setenv("USERPROFILE", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	reg, err := agents.NewDefaultRegistry()
@@ -1526,7 +1525,6 @@ func TestManagedAgentBackupPathsOpenCodeDefaultAgentOwnershipFollowsConfigDir(t 
 	homeDir := t.TempDir()
 	configDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
-	t.Setenv("USERPROFILE", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("OPENCODE_CONFIG_DIR", configDir)
 

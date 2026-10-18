@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -18,9 +17,6 @@ import (
 // private settings file private. opencode.json may hold provider credentials,
 // so a rewrite must never widen 0600 to 0644.
 func TestOpenCodeFamilySettingsWritersPreservePrivateMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 
 	for _, agent := range []model.AgentID{model.AgentOpenCode, model.AgentKilocode} {
 		t.Run(string(agent), func(t *testing.T) {

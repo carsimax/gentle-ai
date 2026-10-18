@@ -35,7 +35,7 @@ type compatibilityDirectoryWriter interface {
 	Close() error
 }
 
-// compatibilityRefreshTransaction owns the Windows compatibility tree for an
+// compatibilityRefreshTransaction owns the compatibility tree for an
 // entire pipeline run. The generic snapshotter must never inspect these paths.
 type compatibilityRefreshTransaction interface {
 	Run() error

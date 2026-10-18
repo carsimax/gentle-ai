@@ -2,23 +2,17 @@ package installcmd
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/versions"
 )
 
 func TestValidateGoForModuleInstall(t *testing.T) {
 	tests := []struct {
 		name        string
-		profile     system.PlatformProfile
 		lookPath    func(string) (string, error)
 		goVersion   func() ([]byte, error)
 		env         map[string]string
@@ -26,8 +20,7 @@ func TestValidateGoForModuleInstall(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:    "go not in PATH returns error mentioning Go 1.24+",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "go not in PATH returns error mentioning Go 1.24+",
 			lookPath: func(file string) (string, error) {
 				return "", fmt.Errorf("not found")
 			},
@@ -37,66 +30,50 @@ func TestValidateGoForModuleInstall(t *testing.T) {
 			errContains: "Go 1.24+",
 		},
 		{
-			name:    "go version below 1.24 returns error",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "go version below 1.24 returns error",
 			lookPath: func(file string) (string, error) {
 				return "/usr/bin/go", nil
 			},
-			goVersion:   func() ([]byte, error) { return []byte("go version go1.21.0 linux/amd64"), nil },
+			goVersion:   func() ([]byte, error) { return []byte("go version go1.21.0 darwin/arm64"), nil },
 			env:         map[string]string{},
 			wantErr:     true,
 			errContains: "Go 1.24+",
 		},
 		{
-			name:    "go version 1.23 returns error",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "go version 1.23 returns error",
 			lookPath: func(file string) (string, error) {
 				return "/usr/bin/go", nil
 			},
-			goVersion:   func() ([]byte, error) { return []byte("go version go1.23.5 linux/amd64"), nil },
+			goVersion:   func() ([]byte, error) { return []byte("go version go1.23.5 darwin/arm64"), nil },
 			env:         map[string]string{},
 			wantErr:     true,
 			errContains: "Go 1.24+",
 		},
 		{
-			name:    "GO111MODULE=off on linux returns error with export fix",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "GO111MODULE=off returns error with export fix",
 			lookPath: func(file string) (string, error) {
 				return "/usr/bin/go", nil
 			},
-			goVersion:   func() ([]byte, error) { return []byte("go version go1.24.0 linux/amd64"), nil },
+			goVersion:   func() ([]byte, error) { return []byte("go version go1.24.0 darwin/arm64"), nil },
 			env:         map[string]string{"GO111MODULE": "off"},
 			wantErr:     true,
 			errContains: "export GO111MODULE=on",
 		},
 		{
-			name:    "GO111MODULE=off on windows returns error with powershell fix",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-			lookPath: func(file string) (string, error) {
-				return `C:\Go\bin\go.exe`, nil
-			},
-			goVersion:   func() ([]byte, error) { return []byte("go version go1.24.0 windows/amd64"), nil },
-			env:         map[string]string{"GO111MODULE": "off"},
-			wantErr:     true,
-			errContains: "$env:GO111MODULE",
-		},
-		{
-			name:    "go 1.24 without GO111MODULE=off succeeds",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "go 1.24 without GO111MODULE=off succeeds",
 			lookPath: func(file string) (string, error) {
 				return "/usr/bin/go", nil
 			},
-			goVersion: func() ([]byte, error) { return []byte("go version go1.24.0 linux/amd64"), nil },
+			goVersion: func() ([]byte, error) { return []byte("go version go1.24.0 darwin/arm64"), nil },
 			env:       map[string]string{},
 			wantErr:   false,
 		},
 		{
-			name:    "go 1.25 succeeds",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt"},
+			name: "go 1.25 succeeds",
 			lookPath: func(file string) (string, error) {
 				return "/usr/bin/go", nil
 			},
-			goVersion: func() ([]byte, error) { return []byte("go version go1.25.0 linux/amd64"), nil },
+			goVersion: func() ([]byte, error) { return []byte("go version go1.25.0 darwin/arm64"), nil },
 			env:       map[string]string{},
 			wantErr:   false,
 		},
@@ -116,7 +93,7 @@ func TestValidateGoForModuleInstall(t *testing.T) {
 				osGetenv = origGetenv
 			})
 
-			err := validateGoForModuleInstall(tt.profile)
+			err := validateGoForModuleInstall()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("validateGoForModuleInstall() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -162,38 +139,8 @@ func TestResolveDependencyInstall(t *testing.T) {
 			want:    CommandSequence{{"brew", "install", "somepkg"}},
 		},
 		{
-			name:    "ubuntu resolves apt command",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			dep:     "somepkg",
-			want:    CommandSequence{{"sudo", "apt-get", "install", "-y", "somepkg"}},
-		},
-		{
-			name:    "arch resolves pacman command",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			dep:     "somepkg",
-			want:    CommandSequence{{"sudo", "pacman", "-S", "--noconfirm", "somepkg"}},
-		},
-		{
-			name:    "fedora resolves dnf command",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			dep:     "somepkg",
-			want:    CommandSequence{{"sudo", "dnf", "install", "-y", "somepkg"}},
-		},
-		{
-			name:    "silverblue resolves rpm-ostree command",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "rpm-ostree"},
-			dep:     "somepkg",
-			want:    CommandSequence{{"rpm-ostree", "install", "-y", "--apply-live", "somepkg"}},
-		},
-		{
-			name:    "windows resolves winget command",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-			dep:     "somepkg",
-			want:    CommandSequence{{"winget", "install", "--id", "somepkg", "-e", "--accept-source-agreements", "--accept-package-agreements"}},
-		},
-		{
-			name:    "unsupported package manager returns error",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "zypper"},
+			name:    "non-brew package manager returns error",
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "nix"},
 			dep:     "somepkg",
 			wantErr: true,
 		},
@@ -223,73 +170,6 @@ func TestResolveDependencyInstall(t *testing.T) {
 	}
 }
 
-func TestGitBashPathResolvesFromGitOnPath(t *testing.T) {
-	// Create a fake directory structure mimicking Git for Windows layout:
-	// tmpdir/cmd/git.exe  (git binary)
-	// tmpdir/bin/bash.exe (git bash)
-	tmpDir := t.TempDir()
-	cmdDir := filepath.Join(tmpDir, "cmd")
-	binDir := filepath.Join(tmpDir, "bin")
-	if err := os.MkdirAll(cmdDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	fakeGit := filepath.Join(cmdDir, "git.exe")
-	if err := os.WriteFile(fakeGit, []byte("fake"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	fakeBash := filepath.Join(binDir, "bash.exe")
-	if err := os.WriteFile(fakeBash, []byte("fake"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	// Override cmdLookPath to return our fake git.
-	original := cmdLookPath
-	cmdLookPath = func(file string) (string, error) {
-		if file == "git" {
-			return fakeGit, nil
-		}
-		return "", fmt.Errorf("not found")
-	}
-	t.Cleanup(func() { cmdLookPath = original })
-
-	got := gitBashPath()
-	if got != fakeBash {
-		t.Fatalf("gitBashPath() = %q, want %q", got, fakeBash)
-	}
-}
-
-func TestGitBashPathFallsBackToBareWhenNoGit(t *testing.T) {
-	origLookPath := cmdLookPath
-	cmdLookPath = func(file string) (string, error) {
-		return "", fmt.Errorf("not found")
-	}
-	t.Cleanup(func() { cmdLookPath = origLookPath })
-
-	origStat := osStat
-	osStat = func(name string) (os.FileInfo, error) {
-		return nil, fmt.Errorf("not found")
-	}
-	t.Cleanup(func() { osStat = origStat })
-
-	got := gitBashPath()
-	if got != "bash" {
-		t.Fatalf("gitBashPath() = %q, want %q", got, "bash")
-	}
-}
-
-func TestBashScriptPathWindowsUsesForwardSlashes(t *testing.T) {
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
-	got := bashScriptPath(profile, `C:\Users\jorge\AppData\Local\Temp\gentleman-guardian-angel\install.sh`)
-	want := "C:/Users/jorge/AppData/Local/Temp/gentleman-guardian-angel/install.sh"
-	if got != want {
-		t.Fatalf("bashScriptPath() = %q, want %q", got, want)
-	}
-}
-
 func TestResolveAgentInstall(t *testing.T) {
 	r := NewResolver()
 
@@ -307,114 +187,28 @@ func TestResolveAgentInstall(t *testing.T) {
 			want:    CommandSequence{{"npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
 		},
 		{
-			name:    "claude-code on linux system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			agent:   model.AgentClaudeCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
-		},
-		{
-			name:    "claude-code on linux nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", NpmWritable: true},
-			agent:   model.AgentClaudeCode,
-			want:    CommandSequence{{"npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
-		},
-		{
-			name:    "claude-code on arch system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			agent:   model.AgentClaudeCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
-		},
-		{
-			name:    "claude-code on fedora nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", NpmWritable: true},
-			agent:   model.AgentClaudeCode,
-			want:    CommandSequence{{"npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
-		},
-		{
 			name:    "opencode on darwin uses V2 npm package",
 			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew"},
 			agent:   model.AgentOpenCode,
 			want:    CommandSequence{{"npm", "install", "-g", "@opencode/cli@latest"}},
 		},
 		{
-			name:    "opencode on ubuntu system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "opencode on ubuntu nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", NpmWritable: true},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "opencode on arch system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "opencode on fedora system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "opencode on fedora nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", NpmWritable: true},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			// Issue #2499: the probe (#2493) accepts any Linux package manager
-			// on PATH; the resolver must not re-enumerate a subset of that list.
-			name:    "opencode on alpine system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: "alpine", PackageManager: "apk", Supported: true},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "opencode on opensuse nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: "opensuse-leap", PackageManager: "zypper", Supported: true, NpmWritable: true},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
 			// A Linux profile the probe rejected (no manager on PATH) must keep
 			// erroring: the default arm is gated on a non-empty PackageManager.
-			name:    "opencode on linux without package manager returns error",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: "unknown", PackageManager: ""},
+			name:    "opencode without package manager returns error",
+			profile: system.PlatformProfile{OS: "freebsd", PackageManager: ""},
 			agent:   model.AgentOpenCode,
 			wantErr: true,
 		},
 		{
-			name:    "claude-code on windows uses npm without sudo",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", NpmWritable: true},
-			agent:   model.AgentClaudeCode,
-			want:    CommandSequence{{"npm", "install", "-g", "--ignore-scripts", "@anthropic-ai/claude-code@latest"}},
-		},
-		{
-			name:    "opencode on windows uses npm without sudo",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-			agent:   model.AgentOpenCode,
-			want:    CommandSequence{{"npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "kimi on windows uses uv to strictly enforce secure package installation",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", Supported: true},
-			agent:   model.AgentKimi,
-			want:    CommandSequence{{"uv", "tool", "install", "--python", "3.13", "kimi-cli"}},
-		},
-		{
-			name:    "kimi on unix uses uv to strictly enforce secure package installation",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", Supported: true},
+			name:    "kimi on macOS uses uv to strictly enforce secure package installation",
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentKimi,
 			want:    CommandSequence{{"uv", "tool", "install", "--python", "3.13", "kimi-cli"}},
 		},
 		{
 			name:    "kimi on unsupported profile returns error",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", Supported: false},
+			profile: system.PlatformProfile{OS: "freebsd", Supported: false},
 			agent:   model.AgentKimi,
 			wantErr: true,
 		},
@@ -456,7 +250,7 @@ func TestValidateAgentInstallPreflight(t *testing.T) {
 	}{
 		{
 			name:    "kimi on unsupported platform returns unsupported error before uv lookup",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: "unknown", PackageManager: "", Supported: false},
+			profile: system.PlatformProfile{OS: "freebsd", PackageManager: "", Supported: false},
 			agent:   model.AgentKimi,
 			lookPath: func(file string) (string, error) {
 				return "", fmt.Errorf("should not be called")
@@ -479,7 +273,7 @@ func TestValidateAgentInstallPreflight(t *testing.T) {
 		},
 		{
 			name:    "kimi with uv present passes preflight",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt", Supported: true},
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentKimi,
 			lookPath: func(file string) (string, error) {
 				if file == "uv" {
@@ -506,7 +300,7 @@ func TestValidateAgentInstallPreflight(t *testing.T) {
 			// Pi requires both `pi` and npm: InstallCommand always runs engramInitCommand()
 			// which executes `pnpm dlx` or `npm exec` (both need Node.js/npm).
 			name:    "pi with binary and npm present passes preflight",
-			profile: system.PlatformProfile{OS: "linux", PackageManager: "apt", Supported: true},
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentPi,
 			lookPath: func(file string) (string, error) {
 				if file == "pi" || file == "npm" {
@@ -519,7 +313,7 @@ func TestValidateAgentInstallPreflight(t *testing.T) {
 		{
 			// Pi npm gate: pi present but npm absent must fail with Node.js remediation.
 			name:    "pi missing npm returns actionable remediation",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", Supported: true},
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentPi,
 			lookPath: func(file string) (string, error) {
 				if file == "pi" {
@@ -550,44 +344,24 @@ func TestValidateAgentInstallPreflight(t *testing.T) {
 			// actionable error (not proceed into the pipeline to surface a cryptic
 			// "exec: npm: executable file not found in PATH" during agent install).
 			name:    "claude-code missing npm returns actionable remediation",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", Supported: true},
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentClaudeCode,
 			lookPath: func(file string) (string, error) {
 				return "", fmt.Errorf("not found")
 			},
 			wantErr:     true,
-			errContains: "winget install OpenJS.NodeJS.LTS",
+			errContains: "brew install node",
 		},
 		{
-			// OpenCode also uses npm on Windows.
+			// OpenCode also uses npm.
 			name:    "opencode missing npm returns actionable remediation",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", Supported: true},
+			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true},
 			agent:   model.AgentOpenCode,
 			lookPath: func(file string) (string, error) {
 				return "", fmt.Errorf("not found")
 			},
 			wantErr:     true,
 			errContains: "npm",
-		},
-		{
-			name:    "silverblue missing npm returns actionable remediation and degraded path",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "rpm-ostree", Supported: true},
-			agent:   model.AgentClaudeCode,
-			lookPath: func(file string) (string, error) {
-				return "", fmt.Errorf("not found")
-			},
-			wantErr:     true,
-			errContains: "rpm-ostree install -y nodejs npm && systemctl reboot",
-		},
-		{
-			name:    "silverblue missing uv returns actionable remediation and degraded path",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "rpm-ostree", Supported: true},
-			agent:   model.AgentKimi,
-			lookPath: func(file string) (string, error) {
-				return "", fmt.Errorf("not found")
-			},
-			wantErr:     true,
-			errContains: "rpm-ostree install -y uv && systemctl reboot",
 		},
 	}
 
@@ -645,26 +419,6 @@ func TestResolveComponentInstall(t *testing.T) {
 			component: model.ComponentEngram,
 			want:      CommandSequence{{"brew", "tap", "Gentleman-Programming/homebrew-tap"}, {"brew", "install", "engram"}},
 		},
-		// Linux and Windows engram now use DownloadLatestBinary() — resolver returns error.
-		// These cases are handled by run.go's componentApplyStep directly.
-		{
-			name:      "engram on ubuntu returns error (uses DownloadLatestBinary instead)",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			component: model.ComponentEngram,
-			wantErr:   true,
-		},
-		{
-			name:      "engram on arch returns error (uses DownloadLatestBinary instead)",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			component: model.ComponentEngram,
-			wantErr:   true,
-		},
-		{
-			name:      "engram on fedora returns error (uses DownloadLatestBinary instead)",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			component: model.ComponentEngram,
-			wantErr:   true,
-		},
 		{
 			name:      "gga on darwin uses brew tap and reinstall",
 			profile:   system.PlatformProfile{OS: "darwin", PackageManager: "brew"},
@@ -672,92 +426,10 @@ func TestResolveComponentInstall(t *testing.T) {
 			want:      CommandSequence{{"brew", "tap", "Gentleman-Programming/homebrew-tap"}, {"brew", "reinstall", "gga"}},
 		},
 		{
-			name:      "gga on ubuntu uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"mkdir", "-p", "/tmp/gentleman-guardian-angel"},
-				{"git", "init", "/tmp/gentleman-guardian-angel"},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "refs/tags/v" + versions.GGAVersion + ":refs/tags/v" + versions.GGAVersion},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "checkout", "-f", "refs/tags/v" + versions.GGAVersion},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			name:      "gga on arch uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"mkdir", "-p", "/tmp/gentleman-guardian-angel"},
-				{"git", "init", "/tmp/gentleman-guardian-angel"},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "refs/tags/v" + versions.GGAVersion + ":refs/tags/v" + versions.GGAVersion},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "checkout", "-f", "refs/tags/v" + versions.GGAVersion},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			name:      "gga on fedora uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"mkdir", "-p", "/tmp/gentleman-guardian-angel"},
-				{"git", "init", "/tmp/gentleman-guardian-angel"},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "refs/tags/v" + versions.GGAVersion + ":refs/tags/v" + versions.GGAVersion},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "checkout", "-f", "refs/tags/v" + versions.GGAVersion},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			// Issue #2499: GGA's Linux install is git clone + install.sh and
-			// never touches the package manager, so any probed manager works.
-			name:      "gga on alpine uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: "alpine", PackageManager: "apk", Supported: true},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"mkdir", "-p", "/tmp/gentleman-guardian-angel"},
-				{"git", "init", "/tmp/gentleman-guardian-angel"},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "refs/tags/v" + versions.GGAVersion + ":refs/tags/v" + versions.GGAVersion},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "checkout", "-f", "refs/tags/v" + versions.GGAVersion},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			name:      "gga on nixos uses git clone and install.sh",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: "nixos", PackageManager: "nix", Supported: true},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"rm", "-rf", "/tmp/gentleman-guardian-angel"},
-				{"mkdir", "-p", "/tmp/gentleman-guardian-angel"},
-				{"git", "init", "/tmp/gentleman-guardian-angel"},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", "refs/tags/v" + versions.GGAVersion + ":refs/tags/v" + versions.GGAVersion},
-				{"git", "-C", "/tmp/gentleman-guardian-angel", "checkout", "-f", "refs/tags/v" + versions.GGAVersion},
-				{"bash", "/tmp/gentleman-guardian-angel/install.sh"},
-			},
-		},
-		{
-			name:      "gga on linux without package manager returns error",
-			profile:   system.PlatformProfile{OS: "linux", LinuxDistro: "unknown", PackageManager: ""},
+			name:      "gga without package manager returns error",
+			profile:   system.PlatformProfile{OS: "freebsd", PackageManager: ""},
 			component: model.ComponentGGA,
 			wantErr:   true,
-		},
-		{
-			name:      "engram on windows returns error (uses DownloadLatestBinary instead)",
-			profile:   system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-			component: model.ComponentEngram,
-			wantErr:   true,
-		},
-		{
-			name:      "gga on windows cleans temp dir and uses git bash",
-			profile:   system.PlatformProfile{OS: "windows", PackageManager: "winget"},
-			component: model.ComponentGGA,
-			want: CommandSequence{
-				{"git", "clone", "--depth=1", "--branch", "v" + versions.GGAVersion, "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", filepath.Join(os.TempDir(), "gentleman-guardian-angel")},
-				{gitBashPath(), bashScriptPath(system.PlatformProfile{OS: "windows"}, filepath.Join(os.TempDir(), "gentleman-guardian-angel", "install.sh"))},
-			},
 		},
 		{
 			name:      "unsupported component returns error",
@@ -785,124 +457,11 @@ func TestResolveComponentInstall(t *testing.T) {
 	}
 }
 
-func TestResolveGGAInstall_UsesPinnedReleaseTag(t *testing.T) {
-	r := NewResolver()
-	cmds, err := r.ResolveComponentInstall(
-		system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-		model.ComponentGGA,
-	)
-	if err != nil {
-		t.Fatalf("ResolveComponentInstall() error = %v", err)
-	}
-	if len(cmds) < 2 {
-		t.Fatalf("ResolveComponentInstall() returned %d commands, want clone command", len(cmds))
-	}
-
-	tagRef := "refs/tags/v" + versions.GGAVersion
-	wantFetch := []string{
-		"git",
-		"-C",
-		"/tmp/gentleman-guardian-angel",
-		"fetch",
-		"--depth=1",
-		"https://github.com/Gentleman-Programming/gentleman-guardian-angel.git",
-		tagRef + ":" + tagRef,
-	}
-	if !reflect.DeepEqual(cmds[3], wantFetch) {
-		t.Fatalf("GGA fetch command = %v, want %v", cmds[3], wantFetch)
-	}
-}
-
-func TestGGAInstall_CleanupCommandBehavior(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows cleanup moved to the runtime PowerShell boundary")
-	}
-	// Create a temp directory to simulate the clone destination.
-	tmpDir := t.TempDir()
-	staleDir := filepath.Join(tmpDir, "gentleman-guardian-angel")
-	if err := os.MkdirAll(staleDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// Write a file to make it non-empty.
-	staleFile := filepath.Join(staleDir, "stale_file.txt")
-	if err := os.WriteFile(staleFile, []byte("stale content"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Resolve the installation command sequence to get the cleanup command.
-	r := NewResolver()
-	var profile system.PlatformProfile
-	if runtime.GOOS == "windows" {
-		profile = system.PlatformProfile{OS: "windows", PackageManager: "winget"}
-	} else {
-		profile = system.PlatformProfile{OS: "linux", LinuxDistro: "ubuntu", PackageManager: "apt"}
-	}
-
-	cmds, err := r.ResolveComponentInstall(profile, model.ComponentGGA)
-	if err != nil {
-		t.Fatalf("failed to resolve GGA install: %v", err)
-	}
-	if len(cmds) < 2 {
-		t.Fatalf("expected at least 2 commands, got %d", len(cmds))
-	}
-
-	// Replace the resolved target path with our test staleDir in the cleanup command.
-	cleanupCmd := cmds[0]
-	var testCmd []string
-	if profile.OS == "windows" {
-		// Cleanup command: powershell -NoProfile -Command "..."
-		// Substitute the system Temp path with our local staleDir.
-		systemTemp := system.PowerShellSingleQuoted(filepath.Join(os.TempDir(), "gentleman-guardian-angel"))
-		cmdStr := strings.ReplaceAll(cleanupCmd[3], systemTemp, system.PowerShellSingleQuoted(staleDir))
-		testCmd = []string{cleanupCmd[0], cleanupCmd[1], cleanupCmd[2], cmdStr}
-	} else {
-		// Cleanup command: rm -rf /tmp/gentleman-guardian-angel
-		// Substitute /tmp/... with our local staleDir.
-		testCmd = []string{cleanupCmd[0], cleanupCmd[1], staleDir}
-	}
-
-	// Run the cleanup command.
-	var execCmd *exec.Cmd
-	if len(testCmd) > 1 {
-		execCmd = exec.Command(testCmd[0], testCmd[1:]...)
-	} else {
-		execCmd = exec.Command(testCmd[0])
-	}
-	if out, err := execCmd.CombinedOutput(); err != nil {
-		t.Fatalf("cleanup command failed: %v, output: %s", err, string(out))
-	}
-
-	// Assert the stale directory has been deleted.
-	if _, err := os.Stat(staleDir); !os.IsNotExist(err) {
-		t.Fatalf("expected stale directory %q to be deleted, but it still exists", staleDir)
-	}
-
-	// Run the cleanup command again (when directory doesn't exist) to verify no-op/success.
-	if len(testCmd) > 1 {
-		execCmd = exec.Command(testCmd[0], testCmd[1:]...)
-	} else {
-		execCmd = exec.Command(testCmd[0])
-	}
-	if out, err := execCmd.CombinedOutput(); err != nil {
-		t.Fatalf("cleanup command failed on non-existent directory: %v, output: %s", err, string(out))
-	}
-}
-
-func TestPowerShellSingleQuotedValue(t *testing.T) {
-	if got, want := system.PowerShellSingleQuoted(`C:\Users\O'Brien\Temp`), `C:\Users\O''Brien\Temp`; got != want {
-		t.Fatalf("PowerShellSingleQuoted() = %q, want %q", got, want)
-	}
-}
-
 func TestUVInstallHint(t *testing.T) {
 	tests := []struct {
 		pm   string
 		want string
 	}{
-		{
-			pm:   "rpm-ostree",
-			want: "rpm-ostree install -y --apply-live uv (or see https://docs.astral.sh/uv/getting-started/installation/)",
-		},
 		{
 			pm:   "brew",
 			want: "brew install uv",
@@ -915,7 +474,7 @@ func TestUVInstallHint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.pm, func(t *testing.T) {
-			profile := system.PlatformProfile{OS: "linux", PackageManager: tt.pm}
+			profile := system.PlatformProfile{OS: "darwin", PackageManager: tt.pm}
 			got := uvInstallHint(profile)
 			if got != tt.want {
 				t.Fatalf("uvInstallHint(%q) = %q, want %q", tt.pm, got, tt.want)

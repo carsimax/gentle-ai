@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -31,9 +30,6 @@ func TestCursorJudgmentDayCLISmoke(t *testing.T) {
 	}
 	sandbox := t.TempDir()
 	binary := filepath.Join(sandbox, "gentle-ai")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	// This test binary needs no release VCS stamp. TestMain isolates HOME,
@@ -50,14 +46,6 @@ func TestCursorJudgmentDayCLISmoke(t *testing.T) {
 	temp := filepath.Join(sandbox, "tmp")
 	for _, dir := range []string{home, cwd, emptyPath, temp} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if runtime.GOOS == "linux" {
-		// Linux startup requires package-manager discovery even for asset-only
-		// commands. Keep PATH isolated and reject any actual package operation.
-		apt := []byte("#!/bin/sh\necho 'unexpected package-manager execution' >&2\nexit 1\n")
-		if err := os.WriteFile(filepath.Join(emptyPath, "apt"), apt, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}

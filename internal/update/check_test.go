@@ -1748,7 +1748,6 @@ func TestNoUpdatesPath(t *testing.T) {
 	mockNoHomebrew(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	originalStat := osStat
 	t.Cleanup(func() { osStat = originalStat })
 	// An absent PATH entry must not discover a real fallback installation.

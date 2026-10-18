@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -36,9 +35,6 @@ func TestContext7SelectedSettingsRefuseNestedCommentsAndLockedMode(t *testing.T)
 		{"locked mode", "{\"mcp\":{}}\n", 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" && tc.mode != 0o600 {
-				t.Skip("file permission bits are not supported on Windows")
-			}
 			path := filepath.Join(t.TempDir(), "opencode.jsonc")
 			if err := os.WriteFile(path, []byte(tc.content), 0o600); err != nil {
 				t.Fatal(err)
@@ -54,7 +50,7 @@ func TestContext7SelectedSettingsRefuseNestedCommentsAndLockedMode(t *testing.T)
 			if statErr != nil {
 				t.Fatal(statErr)
 			}
-			if runtime.GOOS != "windows" && info.Mode().Perm() != tc.mode {
+			if info.Mode().Perm() != tc.mode {
 				t.Fatalf("settings mode changed: %04o", info.Mode().Perm())
 			}
 			if err := os.Chmod(path, 0o600); err != nil {
@@ -78,9 +74,6 @@ func TestContext7SelectedSettingsPreservePrivateMode(t *testing.T) {
 	}
 	if _, err := injectOpenCodeMergeIntoSettings(path, model.AgentOpenCode); err != nil {
 		t.Fatal(err)
-	}
-	if runtime.GOOS == "windows" {
-		return // POSIX permission bits are not preserved on Windows.
 	}
 	info, err := os.Stat(path)
 	if err != nil || info.Mode().Perm() != 0o600 {
@@ -604,12 +597,10 @@ func TestInjectClaudeWritesUserConfigAndIsIdempotent(t *testing.T) {
 	// Loosen the mode: the byte-identical run must still re-tighten 0600, and
 	// that mode-only repair is a change (#5022).
 	loosened := false
-	if runtime.GOOS != "windows" {
-		if err := os.Chmod(userConfigPath, 0o644); err != nil {
-			t.Fatalf("Chmod(loosen) error = %v", err)
-		}
-		loosened = true
+	if err := os.Chmod(userConfigPath, 0o644); err != nil {
+		t.Fatalf("Chmod(loosen) error = %v", err)
 	}
+	loosened = true
 	second, err := Inject(home, home, claudeAdapter())
 	if err != nil {
 		t.Fatalf("Inject() second error = %v", err)
@@ -636,7 +627,7 @@ func TestInjectClaudeWritesUserConfigAndIsIdempotent(t *testing.T) {
 	}
 	if info, statErr := os.Stat(userConfigPath); statErr != nil {
 		t.Fatalf("Stat(user config) error = %v", statErr)
-	} else if mode := info.Mode().Perm(); runtime.GOOS != "windows" && mode != 0o600 {
+	} else if mode := info.Mode().Perm(); mode != 0o600 {
 		t.Fatalf("~/.claude.json mode = %o; want 0600 (holds the OAuth session)", mode)
 	}
 	root := map[string]any{}
@@ -1333,7 +1324,6 @@ args = ["-y", "context7-mcp"]
 func TestInjectVSCodeWritesContext7ToMCPConfigFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 	adapter := vscode.NewAdapter()
 
 	first, err := Inject(home, home, adapter)
@@ -1648,9 +1638,6 @@ func TestInjectHermesPreservesExistingTopLevelKeys(t *testing.T) {
 // injection, and rewriting a pre-seeded private settings file must never
 // widen it.
 func TestMergeJSONFilePreservesExistingModeOnRewrite(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 	path := filepath.Join(t.TempDir(), "settings.json")
 	if err := os.WriteFile(path, []byte(`{"already":"set"}`), 0o600); err != nil {
 		t.Fatal(err)

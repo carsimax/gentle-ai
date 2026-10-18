@@ -125,13 +125,10 @@ func TestCheckOneTool_GentleAIDuplicatesStillNameInvokedExecutable(t *testing.T)
 	stubDoctorToolProbe(t)
 	origLook := lookPathFn
 	origExec := osExecutableDoctor
-	origExts := executableExtsFn
 	defer func() {
 		lookPathFn = origLook
 		osExecutableDoctor = origExec
-		executableExtsFn = origExts
 	}()
-	executableExtsFn = func() []string { return []string{""} }
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
@@ -204,13 +201,10 @@ func TestCheckOneTool_GentleAIExecutableUnresolvable(t *testing.T) {
 	stubDoctorToolProbe(t)
 	origLook := lookPathFn
 	origExec := osExecutableDoctor
-	origExts := executableExtsFn
 	defer func() {
 		lookPathFn = origLook
 		osExecutableDoctor = origExec
-		executableExtsFn = origExts
 	}()
-	executableExtsFn = func() []string { return []string{""} }
 
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()

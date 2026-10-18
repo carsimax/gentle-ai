@@ -977,7 +977,6 @@ func TestDetectStatusRejectsDisabledOpenCodeWiring(t *testing.T) {
 func TestCodeGraphEffectiveWiringCapabilityIsOptional(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	var openCodeAdapter agents.Adapter = opencode.NewAdapter()
@@ -1055,7 +1054,6 @@ func TestReconcileOpenCodeCodeGraphUsesXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(home, "custom-config")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	settingsPath := filepath.Join(xdg, "opencode", "opencode.json")
 	mustWrite(t, settingsPath, `{}`)

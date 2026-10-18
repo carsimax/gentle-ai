@@ -92,7 +92,7 @@ func TestResolveTargetSkipsManagedBinAndPreventsRecursion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := ResolveTarget(home, "", managed+string(os.PathListSeparator)+filepath.Dir(real))
+	got, err := ResolveTarget(home, managed+string(os.PathListSeparator)+filepath.Dir(real))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func normalizedCandidatePath(t *testing.T, path string) string {
 
 func TestResolveTargetRejectsEmptyAndRelativeEntries(t *testing.T) {
 	home := t.TempDir()
-	if _, err := ResolveTarget(home, "", ""); err == nil {
+	if _, err := ResolveTarget(home, ""); err == nil {
 		t.Fatal("ResolveTarget(empty PATH) error = nil, want unsafe PATH entry rejected")
 	}
 	workingDir := t.TempDir()
@@ -127,7 +127,7 @@ func TestResolveTargetRejectsEmptyAndRelativeEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(workingDir)
-	if _, err := ResolveTarget(home, "", "."); err == nil {
+	if _, err := ResolveTarget(home, "."); err == nil {
 		t.Fatal("ResolveTarget(relative PATH) error = nil, want cwd executable rejected")
 	}
 }
@@ -147,7 +147,7 @@ func TestResolveTargetContinuesAfterBrokenCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := ResolveTarget(home, "", strings.Join([]string{brokenDir, validDir}, string(os.PathListSeparator)))
+	got, err := ResolveTarget(home, strings.Join([]string{brokenDir, validDir}, string(os.PathListSeparator)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestLauncherContentsPreserveExplicitFalse(t *testing.T) {
 			return "1.15.11", nil
 		},
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func TestActivationIsIdempotentAndOffRemovesOnlyOwnedFiles(t *testing.T) {
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 	paths := []string{POSIXLauncherPath(home)}
 	first, err := Activate(home, options)
@@ -268,7 +268,7 @@ func TestActivationRefusesUserOwnedCollision(t *testing.T) {
 	plan, err := PrepareActivation(home, ActivationOptions{
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return "/real/opencode", nil },
+		ResolveTarget: func(string, string) (string, error) { return "/real/opencode", nil },
 	})
 	if err == nil || plan != nil || !strings.Contains(err.Error(), "user-owned") {
 		t.Fatalf("PrepareActivation() plan=%v error=%v, want collision refusal", plan, err)
@@ -285,7 +285,7 @@ func TestActivationRollsBackLauncherWritesWhenPathUpdateFails(t *testing.T) {
 	plan, err := PrepareActivation(home, ActivationOptions{
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return pathErr },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -376,7 +376,7 @@ func TestActivationRestoresLauncherExecutableModeWhenContentMatches(t *testing.T
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 	if _, err := Activate(home, options); err != nil {
 		t.Fatal(err)
@@ -412,7 +412,7 @@ func TestActivationRefusesIncidentalLauncherMarker(t *testing.T) {
 	plan, err := PrepareActivation(home, ActivationOptions{
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return "/real/opencode", nil },
+		ResolveTarget: func(string, string) (string, error) { return "/real/opencode", nil },
 	})
 	if err == nil || plan != nil || !strings.Contains(err.Error(), "user-owned") || !strings.Contains(err.Error(), "move or delete it") {
 		t.Fatalf("PrepareActivation() plan!=nil=%t error=%v, want user-owned collision refusal", plan != nil, err)
@@ -433,7 +433,7 @@ func TestActivationApplyRevalidatesLauncherBeforeWrite(t *testing.T) {
 	plan, err := PrepareActivation(home, ActivationOptions{
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -499,7 +499,7 @@ func TestActivationRollbackPreservesLauncherReplacedAfterWrite(t *testing.T) {
 			}
 			return pathErr
 		},
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	})
 	if err != nil {
 		t.Fatal(err)

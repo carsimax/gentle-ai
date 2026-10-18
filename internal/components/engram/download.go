@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
 const (
@@ -139,7 +138,7 @@ const engramCoreTagPattern = `^v[0-9]+\.[0-9]+\.[0-9]+$`
 //
 // This is the non-brew installation method. The release asset is always the
 // darwin/arm64 archive, the only platform this build supports.
-func DownloadLatestBinary(profile system.PlatformProfile, isBeta bool) (string, error) {
+func DownloadLatestBinary(isBeta bool) (string, error) {
 	// Beta channel: install from HEAD via go install rather than a release archive.
 	// This mirrors the installBetaEngramFromMain path used at install time.
 	if isBeta {

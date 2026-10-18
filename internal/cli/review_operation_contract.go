@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -216,10 +215,10 @@ type ReviewStopContinuation struct {
 // managedAssetsContinuationCommandPattern is the executable-identity half of
 // the published managed_assets_continuation `command` contract (failure.schema
 // .json carries the same regex). The executable token is either the bare
-// `gentle-ai` fallback, an unquoted path, or one of the two shell quoting forms
-// the renderer picks per platform -- POSIX single quotes (the only form no
-// POSIX shell expands) or Windows double quotes (cmd.exe command syntax) --
-// followed by `sync` and an optional `--agent <id>`. Keeping the JSON schema
+// `gentle-ai` fallback, an unquoted path, or one of two quoting forms -- POSIX
+// single quotes (the only form no POSIX shell expands, and the one this build
+// renders) or double quotes (accepted for compatibility with the published
+// contract) -- followed by `sync` and an optional `--agent <id>`. Keeping the JSON schema
 // and this Go mirror in one shape is what lets Validate() enforce the same
 // contract the published schema does. The pattern governs structure; the safe
 // choice of form for a given path is managedAssetsExecutableToken's job.
@@ -240,28 +239,15 @@ var managedAssetsBareExecutable = regexp.MustCompile(`^` + managedAssetsBareExec
 // indirection keeps the resolution stubbable in tests.
 var reviewManagedAssetsExecutablePath = os.Executable
 
-// reviewManagedAssetsGOOS selects the quoting form for a path that needs it:
-// the invoking binary knows the platform the continuation will run on. Var
-// indirection keeps it stubbable in tests.
-var reviewManagedAssetsGOOS = runtime.GOOS
-
 // managedAssetsExecutableToken renders one executable path as a command-line
-// token using one exact platform-specific encoding (#4434): POSIX platforms
-// quote with single quotes, which no POSIX shell expands ($ and backticks
-// expand even inside double quotes); Windows quotes with double quotes, the
-// command syntax cmd.exe accepts, because cmd.exe does not treat single
-// quotes as command syntax. A path over the safe bare class stays bare and
-// runs as printed in every shell. Caveat: PowerShell requires the call
-// operator for a leading quoted token (`& "C:\..." sync ...`), so the quoted
-// Windows form is the cmd.exe contract, not a paste-and-run PowerShell one;
-// machine relays that spawn the anchored executable directly, and bare
-// tokens, are unaffected.
+// token (#4434): it quotes with single quotes, which no POSIX shell expands
+// ($ and backticks expand even inside double quotes). A path over the safe
+// bare class stays bare and runs as printed in every shell. The published
+// continuation pattern still accepts a double-quoted token for compatibility
+// with continuations rendered by other builds.
 func managedAssetsExecutableToken(path string) string {
 	if managedAssetsBareExecutable.MatchString(path) {
 		return path
-	}
-	if reviewManagedAssetsGOOS == "windows" {
-		return "\"" + strings.ReplaceAll(path, "\"", "\\\"") + "\""
 	}
 	// The standard POSIX idiom for an embedded single quote: close the quoted
 	// span, emit an escaped quote, reopen the span.

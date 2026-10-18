@@ -16,14 +16,14 @@ import (
 // Platform help and TUI title live in shell_install_help_{darwin,other}.go.
 
 // The flag is registered only so an explicit selector is refused by name
-// instead of being dropped: the Linux request has no channel to bind.
+// instead of being dropped: the macOS request has no channel to bind.
 func shellInstallPlatformFlags(flags *flag.FlagSet, _ *shellinstaller.UserInstallRequest) func() error {
-	channel := flags.String("channel", "", "Windows-only channel selection")
+	channel := flags.String("channel", "", "unsupported on macOS: channel selection")
 	return func() error {
 		explicit := false
 		flags.Visit(func(f *flag.Flag) { explicit = explicit || f.Name == "channel" })
 		if explicit {
-			return fmt.Errorf("--channel %q refused: channel selection is Windows-only; rerun `gentle-ai shell install` without --channel", *channel)
+			return fmt.Errorf("--channel %q refused: channel selection is not supported on macOS; rerun `gentle-ai shell install` without --channel", *channel)
 		}
 		return nil
 	}

@@ -5,13 +5,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/versions"
 )
 
 // cmdLookPath, osStat, osGetenv, and cmdGoVersion are package-level vars for testability.
@@ -62,9 +60,8 @@ func (profileResolver) ResolveAgentInstall(profile system.PlatformProfile, agent
 
 // resolveClaudeCodeInstall returns the npm install command sequence gentle-ai
 // shows for Claude Code — display text only, never executed by gentle-ai
-// (see agentInstallStep in internal/cli/run.go). On Linux with system npm,
-// sudo is required. With nvm/fnm/volta, it is not. On Windows and macOS,
-// sudo is never needed.
+// (see agentInstallStep in internal/cli/run.go). On macOS, sudo is never
+// needed.
 //
 // --ignore-scripts blocks postinstall hooks, the primary supply-chain attack
 // vector for npm packages. The version advises "latest" rather than a pin:
@@ -72,23 +69,16 @@ func (profileResolver) ResolveAgentInstall(profile system.PlatformProfile, agent
 // ran the command unattended. Now a human reads and runs it, and a stale
 // hardcoded version goes wrong the moment a newer release ships (the same
 // drift this shape fixed for Codex's GPT-5.6 update advice).
-func resolveClaudeCodeInstall(profile system.PlatformProfile) CommandSequence {
+func resolveClaudeCodeInstall(_ system.PlatformProfile) CommandSequence {
 	const pkg = "@anthropic-ai/claude-code@latest"
-	if profile.OS == "linux" && !profile.NpmWritable {
-		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}
-	}
 	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
 }
 
 // resolveKilocodeInstall returns the npm install command sequence gentle-ai
 // shows for Kilocode — display text only, never executed by gentle-ai. On
-// Linux with system npm, sudo is required. With nvm/fnm/volta, it is not.
-// On Windows and macOS, sudo is never needed.
-func resolveKilocodeInstall(profile system.PlatformProfile) CommandSequence {
+// macOS, sudo is never needed.
+func resolveKilocodeInstall(_ system.PlatformProfile) CommandSequence {
 	const pkg = "@kilocode/cli@latest"
-	if profile.OS == "linux" && !profile.NpmWritable {
-		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}
-	}
 	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
 }
 
@@ -99,7 +89,7 @@ func resolveKimiInstall(profile system.PlatformProfile) (CommandSequence, error)
 	// Kimi CLI is a python-based tool. We use Astral's `uv` as our deterministic
 	// prerequisite manager to ensure secure and isolated installs.
 	if !profile.Supported {
-		return nil, fmt.Errorf("Kimi is not supported on this platform (%s/%s)", profile.OS, profile.LinuxDistro)
+		return nil, fmt.Errorf("Kimi is not supported on this platform (%s)", profile.OS)
 	}
 
 	// We explicitly request python 3.13 as strictly defined by Kimi upstream.
@@ -156,36 +146,28 @@ func validatePiInstallPreflight() error {
 func validateNpmInstallPreflight(profile system.PlatformProfile) error {
 	if _, err := cmdLookPath("npm"); err != nil {
 		hint := system.InstallHintForDep("node", profile)
-		msg := fmt.Sprintf(
+		return fmt.Errorf(
 			"Node.js / npm is required but `npm` was not found in PATH.\n"+
 				"Install Node.js (npm is included) and retry:\n"+
 				"  %s",
 			hint,
 		)
-		if profile.PackageManager == "rpm-ostree" {
-			msg += "\nIf a pending deployment prevents --apply-live, stage without it and reboot:\n  rpm-ostree install -y nodejs npm && systemctl reboot"
-		}
-		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }
 
 func validateKimiInstallPreflight(profile system.PlatformProfile) error {
 	if !profile.Supported {
-		return fmt.Errorf("Kimi is not supported on this platform (%s/%s)", profile.OS, profile.LinuxDistro)
+		return fmt.Errorf("Kimi is not supported on this platform (%s)", profile.OS)
 	}
 
 	if _, err := cmdLookPath("uv"); err != nil {
-		msg := fmt.Sprintf(
+		return fmt.Errorf(
 			"Kimi requires Astral uv, but `uv` was not found in PATH.\n"+
 				"Install uv and retry:\n"+
 				"  %s",
 			uvInstallHint(profile),
 		)
-		if profile.PackageManager == "rpm-ostree" {
-			msg += "\nIf a pending deployment prevents --apply-live, stage without it and reboot:\n  rpm-ostree install -y uv && systemctl reboot"
-		}
-		return fmt.Errorf("%s", msg)
 	}
 
 	return nil
@@ -195,16 +177,6 @@ func uvInstallHint(profile system.PlatformProfile) string {
 	switch profile.PackageManager {
 	case "brew":
 		return "brew install uv"
-	case "apt":
-		return "sudo apt-get install -y uv (or see https://docs.astral.sh/uv/getting-started/installation/)"
-	case "pacman":
-		return "sudo pacman -S --noconfirm uv"
-	case "dnf":
-		return "sudo dnf install -y uv"
-	case "rpm-ostree":
-		return "rpm-ostree install -y --apply-live uv (or see https://docs.astral.sh/uv/getting-started/installation/)"
-	case "winget":
-		return "winget install --id astral-sh.uv -e --accept-source-agreements --accept-package-agreements"
 	default:
 		return "https://docs.astral.sh/uv/getting-started/installation/"
 	}
@@ -229,22 +201,11 @@ func (profileResolver) ResolveDependencyInstall(profile system.PlatformProfile, 
 	switch profile.PackageManager {
 	case "brew":
 		return CommandSequence{{"brew", "install", dependency}}, nil
-	case "apt":
-		return CommandSequence{{"sudo", "apt-get", "install", "-y", dependency}}, nil
-	case "pacman":
-		return CommandSequence{{"sudo", "pacman", "-S", "--noconfirm", dependency}}, nil
-	case "dnf":
-		return CommandSequence{{"sudo", "dnf", "install", "-y", dependency}}, nil
-	case "rpm-ostree":
-		return CommandSequence{{"rpm-ostree", "install", "-y", "--apply-live", dependency}}, nil
-	case "winget":
-		return CommandSequence{{"winget", "install", "--id", dependency, "-e", "--accept-source-agreements", "--accept-package-agreements"}}, nil
 	default:
 		return nil, fmt.Errorf(
-			"unsupported package manager %q for os=%q distro=%q",
+			"unsupported package manager %q for os=%q",
 			profile.PackageManager,
 			profile.OS,
-			profile.LinuxDistro,
 		)
 	}
 }
@@ -260,67 +221,24 @@ func resolveOpenCodeInstall(profile system.PlatformProfile) (CommandSequence, er
 		return CommandSequence{
 			{"npm", "install", "-g", pkg},
 		}, nil
-	case "winget":
-		// On Windows, npm global installs do not require sudo.
-		return CommandSequence{{"npm", "install", "-g", pkg}}, nil
 	default:
-		// Any package manager the system probe accepted is enough here: the
-		// install runs through npm, never through the manager itself, so
-		// re-enumerating managers would silently narrow the probe's list
-		// (issue #2499). The gate keeps a probe-rejected Linux profile
-		// (empty PackageManager) on the unsupported arm.
-		if profile.OS == "linux" && profile.PackageManager != "" {
-			if profile.NpmWritable {
-				return CommandSequence{{"npm", "install", "-g", pkg}}, nil
-			}
-			return CommandSequence{{"sudo", "npm", "install", "-g", pkg}}, nil
-		}
 		return nil, fmt.Errorf(
-			"unsupported platform for opencode: os=%q distro=%q pm=%q",
-			profile.OS, profile.LinuxDistro, profile.PackageManager,
+			"unsupported platform for opencode: os=%q pm=%q",
+			profile.OS, profile.PackageManager,
 		)
 	}
 }
 
 // resolveGGAInstall returns the correct install command sequence for GGA per platform.
 // - Homebrew: tap + scoped formula trust (when supported) + reinstall
-// - linux: git clone + install.sh (GGA is a pure Bash project, NOT a Go module)
 func resolveGGAInstall(profile system.PlatformProfile) (CommandSequence, error) {
 	switch profile.PackageManager {
 	case "brew":
 		return resolveHomebrewComponentInstall("gga", "reinstall"), nil
-	case "winget":
-		// On Windows, use Git Bash explicitly to avoid bare "bash" resolving to
-		// C:\Windows\System32\bash.exe (WSL), which cannot run the script.
-		// Runtime cleanup is handled through system.PowerShellRunner before this
-		// sequence so pwsh launch failures can safely fall back.
-		cloneDst := filepath.Join(os.TempDir(), "gentleman-guardian-angel")
-		bash := gitBashPath()
-		return CommandSequence{
-			{"git", "clone", "--depth=1", "--branch", "v" + versions.GGAVersion, "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", cloneDst},
-			{bash, bashScriptPath(profile, filepath.Join(cloneDst, "install.sh"))},
-		}, nil
 	default:
-		// Any package manager the system probe accepted is enough here: the
-		// Linux install is git clone + install.sh and never touches the
-		// manager, so re-enumerating managers would silently narrow the
-		// probe's list (issue #2499). The gate keeps a probe-rejected Linux
-		// profile (empty PackageManager) on the unsupported arm.
-		if profile.OS == "linux" && profile.PackageManager != "" {
-			const tmpDir = "/tmp/gentleman-guardian-angel"
-			tagRef := "refs/tags/v" + versions.GGAVersion
-			return CommandSequence{
-				{"rm", "-rf", tmpDir},
-				{"mkdir", "-p", tmpDir},
-				{"git", "init", tmpDir},
-				{"git", "-C", tmpDir, "fetch", "--depth=1", "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git", tagRef + ":" + tagRef},
-				{"git", "-C", tmpDir, "checkout", "-f", tagRef},
-				{"bash", tmpDir + "/install.sh"},
-			}, nil
-		}
 		return nil, fmt.Errorf(
-			"unsupported platform for gga: os=%q distro=%q pm=%q",
-			profile.OS, profile.LinuxDistro, profile.PackageManager,
+			"unsupported platform for gga: os=%q pm=%q",
+			profile.OS, profile.PackageManager,
 		)
 	}
 }
@@ -331,10 +249,10 @@ func resolveHomebrewExecutable() string {
 	if path, err := cmdLookPath("brew"); err == nil {
 		return path
 	}
-	for _, binDir := range []string{"/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"} {
+	for _, binDir := range []string{"/opt/homebrew/bin", "/usr/local/bin"} {
 		path := filepath.Join(binDir, "brew")
 		info, err := osStat(path)
-		if err == nil && info.Mode().IsRegular() && (runtime.GOOS == "windows" || info.Mode().Perm()&0o111 != 0) {
+		if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
 			return path
 		}
 	}
@@ -351,65 +269,10 @@ func resolveHomebrewComponentInstall(formula, action string) CommandSequence {
 	return append(commands, []string{"brew", action, formula})
 }
 
-func bashScriptPath(profile system.PlatformProfile, path string) string {
-	if profile.OS == "windows" {
-		return strings.ReplaceAll(path, `\`, "/")
-	}
-	return path
-}
-
-// GitBashPath is the exported wrapper so other packages (e.g. cli) can
-// resolve the Git Bash binary without duplicating the detection logic.
-func GitBashPath() string { return gitBashPath() }
-
-// gitBashPath returns the path to Git Bash on Windows.
-// It resolves git on PATH, then finds bash.exe relative to it
-// (Git for Windows always installs both in the same bin/ directory).
-// Falls back to well-known locations, then to bare "bash" as last resort.
-func gitBashPath() string {
-	// Strategy 1: find git on PATH and derive bash.exe from it.
-	if gitPath, err := cmdLookPath("git"); err == nil {
-		// gitPath is e.g. "C:\Program Files\Git\cmd\git.exe"
-		// bash.exe lives in the sibling bin/ directory.
-		gitDir := filepath.Dir(gitPath) // .../cmd or .../bin
-		parent := filepath.Dir(gitDir)  // .../Git
-
-		candidate := filepath.Join(parent, "bin", "bash.exe")
-		if _, err := osStat(candidate); err == nil {
-			return candidate
-		}
-
-		// git might already be in bin/ (not cmd/).
-		candidate = filepath.Join(gitDir, "bash.exe")
-		if _, err := osStat(candidate); err == nil {
-			return candidate
-		}
-	}
-
-	// Strategy 2: well-known locations.
-	candidates := []string{
-		filepath.Join(os.Getenv("ProgramFiles"), "Git", "bin", "bash.exe"),
-		filepath.Join(os.Getenv("ProgramFiles(x86)"), "Git", "bin", "bash.exe"),
-		`C:\Program Files\Git\bin\bash.exe`,
-	}
-
-	for _, c := range candidates {
-		if c == "" {
-			continue
-		}
-		if _, err := osStat(c); err == nil {
-			return c
-		}
-	}
-
-	// Last resort — bare "bash" and hope it's Git Bash, not WSL.
-	return "bash"
-}
-
 // validateGoForModuleInstall checks that Go ≥1.24 is installed and GO111MODULE is not
 // disabled before attempting `go install`. Returns an actionable error if any check fails.
 // MUST NOT be called for brew-based installs (brew manages Go transitively).
-func validateGoForModuleInstall(profile system.PlatformProfile) error {
+func validateGoForModuleInstall() error {
 	if _, err := cmdLookPath("go"); err != nil {
 		return fmt.Errorf(
 			"Go 1.24+ is required to install Engram but was not found in PATH.\n" +
@@ -440,11 +303,7 @@ func validateGoForModuleInstall(profile system.PlatformProfile) error {
 	}
 
 	if osGetenv("GO111MODULE") == "off" {
-		fix := "export GO111MODULE=on  # then retry"
-		if profile.OS == "windows" {
-			fix = `$env:GO111MODULE = "on"  # PowerShell, then retry`
-		}
-		return fmt.Errorf("Go modules are disabled (GO111MODULE=off).\nRun: %s", fix)
+		return fmt.Errorf("Go modules are disabled (GO111MODULE=off).\nRun: export GO111MODULE=on  # then retry")
 	}
 
 	return nil
@@ -452,15 +311,14 @@ func validateGoForModuleInstall(profile system.PlatformProfile) error {
 
 // resolveEngramInstall returns the correct install command sequence for Engram per platform.
 // - Homebrew: tap + scoped formula trust (when supported) + install
-// - linux/windows: returns an error — callers must use engram.DownloadLatestBinary() instead.
+// - otherwise: returns an error — callers must use engram.DownloadLatestBinary() instead.
 //
-// The go install method has been removed because it required Go 1.24+ which most
-// users on Linux/Windows don't have. Pre-built binaries are available at:
+// Pre-built binaries are available at:
 // https://github.com/Gentleman-Programming/engram/releases
 func resolveEngramInstall(profile system.PlatformProfile) (CommandSequence, error) {
 	switch profile.PackageManager {
 	case "brew":
-		// macOS (or Linux with Homebrew): brew manages Go transitively — no preflight needed.
+		// macOS: brew manages Go transitively — no preflight needed.
 		return resolveHomebrewComponentInstall("engram", "install"), nil
 	default:
 		return nil, fmt.Errorf(

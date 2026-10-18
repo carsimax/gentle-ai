@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -44,9 +43,6 @@ func openCodeSDKIsolationBlocker(executable, physicalExe string) string {
 			return "is a " + name + " version-manager shim"
 		}
 	}
-	if runtime.GOOS == "windows" {
-		return ""
-	}
 	head, err := openCodeSDKScriptHead(physicalExe)
 	if err != nil || !bytes.HasPrefix(head, []byte("#!")) {
 		return ""
@@ -76,7 +72,7 @@ func openCodeSDKShimManagerFromPath(path string) string {
 		return ""
 	}
 	segments := strings.Split(strings.ToLower(filepath.ToSlash(path)), "/")
-	base := strings.TrimSuffix(segments[len(segments)-1], ".exe")
+	base := segments[len(segments)-1]
 	switch base {
 	case "volta", "volta-shim":
 		return "volta"

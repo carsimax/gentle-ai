@@ -20,16 +20,16 @@ import (
 
 // engramDownloadFn is the function used to download the engram binary on the stable channel.
 // Package-level var for testability — swapped in tests to avoid real network calls.
-var engramDownloadFn = func(profile system.PlatformProfile) (string, error) {
-	return engram.DownloadLatestBinary(profile, false)
+var engramDownloadFn = func(system.PlatformProfile) (string, error) {
+	return engram.DownloadLatestBinary(false)
 }
 
 // engramBetaInstallFn installs engram from HEAD via `go install @main` (beta channel).
-// It delegates to engram.DownloadLatestBinary(profile, true), which is the single
+// It delegates to engram.DownloadLatestBinary(true), which is the single
 // canonical beta path shared with the install-time flow. Package-level var for
 // testability — swapped in tests to avoid real go install/network calls.
-var engramBetaInstallFn = func(profile system.PlatformProfile) (string, error) {
-	return engram.DownloadLatestBinary(profile, true)
+var engramBetaInstallFn = func(system.PlatformProfile) (string, error) {
+	return engram.DownloadLatestBinary(true)
 }
 
 // execCommand is a package-level var declared in executor.go (same package).
@@ -404,7 +404,7 @@ func engramBinaryUpgrade(profile system.PlatformProfile) error {
 	var binaryPath string
 	if channel.IsBeta() {
 		// Beta channel: install engram from HEAD via engramBetaInstallFn, which
-		// delegates to engram.DownloadLatestBinary(profile, true). This is the
+		// delegates to engram.DownloadLatestBinary(true). This is the
 		// single canonical beta path shared with the install-time flow in
 		// internal/cli/run.go (installBetaEngramFromMain). The previous inline
 		// `go install` block is removed — all beta logic lives in download.go.

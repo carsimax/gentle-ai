@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -174,9 +173,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 		{name: "parent symlink", linkParent: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" {
-				t.Skip("symlink creation may require elevated privileges")
-			}
 			home, target := t.TempDir(), t.TempDir()
 			targetSkills := target
 			if tc.linkParent {
@@ -211,9 +207,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 		{name: "ordinary descendant symlink", components: []model.ComponentID{model.ComponentSkills}, link: "go-testing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" {
-				t.Skip("symlink creation may require elevated privileges")
-			}
 			home, target := t.TempDir(), t.TempDir()
 			skillsDir := filepath.Join(home, ".agents", "skills")
 			if err := os.MkdirAll(skillsDir, 0o755); err != nil {
@@ -235,9 +228,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 }
 
 func TestCompatibilityRefreshDoesNotFollowParentSwappedAfterValidation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation may require elevated privileges")
-	}
 
 	home, outside := t.TempDir(), t.TempDir()
 	skillsDir := filepath.Join(home, ".agents", "skills")

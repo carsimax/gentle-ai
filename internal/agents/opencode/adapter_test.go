@@ -126,7 +126,6 @@ func TestConfigPathsRespectXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(t.TempDir(), "xdg")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	a := NewAdapter()
 	wantDir := filepath.Join(xdg, "opencode")
@@ -158,7 +157,6 @@ func TestSettingsPathIgnoresNonRegularJSONC(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(t.TempDir(), "xdg")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	configDir := filepath.Join(xdg, "opencode")
 	if err := os.MkdirAll(filepath.Join(configDir, "opencode.jsonc"), 0o755); err != nil {
@@ -188,7 +186,6 @@ func TestEffectiveCodeGraphWiring(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
 			t.Setenv("XDG_CONFIG_HOME", "")
 			path := filepath.Join(ConfigPath(home), tt.fileName)
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -212,7 +209,6 @@ func TestEffectiveCodeGraphWiring(t *testing.T) {
 func TestConfigPathIgnoresRelativeXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join("relative", "config"))
 	want := filepath.Join(home, ".config", "opencode")
 	if got := ConfigPath(home); got != want {

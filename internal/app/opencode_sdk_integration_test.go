@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +28,6 @@ import (
 func TestTUIOpenCodeSDKConsentProvisioningIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test executes an isolated fake npm subprocess")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("fake npm fixture requires a POSIX shell")
 	}
 	for _, tc := range []struct {
 		name       string
@@ -183,9 +179,6 @@ func TestTUIOpenCodeSDKConsentProvisioningIntegration(t *testing.T) {
 func TestTUIOpenCodeSDKConsentFullApplyIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test executes an isolated fake npm subprocess")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("fake npm fixture requires a POSIX shell")
 	}
 	home, config, log := isolateSDKBridgeTest(t, t.TempDir(), "2.0.4")
 	runSDKFullApplyIntegration(t, home, config, log, false)
@@ -426,9 +419,6 @@ func TestTUIOpenCodeSDKConsentRealNPMOfflineIntegration(t *testing.T) {
 
 func realSDKOfflineInputs(t *testing.T) (npm, node, cache string) {
 	t.Helper()
-	if runtime.GOOS != "darwin" {
-		t.Fatal("real offline integration requires macOS sandbox-exec")
-	}
 	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
 		t.Fatal(err)
 	}
@@ -707,9 +697,6 @@ func TestSDKOfflineExportProvenance(t *testing.T) {
 }
 
 func TestSDKOfflineProcessBounds(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS sandbox guard")
-	}
 	root := t.TempDir()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()

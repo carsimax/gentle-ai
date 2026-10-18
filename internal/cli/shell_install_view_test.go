@@ -5,9 +5,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -119,90 +116,6 @@ func TestShellInstallReviewNavigationPreservesCancelAndConfirm(t *testing.T) {
 			t.Fatal("scrolling changed confirmation or cancellation semantics")
 		}
 		cancel()
-	}
-}
-
-func TestShellInstallReviewSharedPreviewReachable(t *testing.T) {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		t.Skip("physical shared selection is Linux amd64 only")
-	}
-	parent := t.TempDir()
-	if err := os.Chmod(parent, 0700); err != nil {
-		t.Fatal(err)
-	}
-	req := shellinstaller.UserInstallRequest{Mode: "shared",
-		Destination:  filepath.Join(parent, strings.Repeat("target-", 12)),
-		SharedPrefix: filepath.Join(parent, strings.Repeat("prefix-", 12)),
-		SharedAgent:  filepath.Join(parent, strings.Repeat("agent-", 12))}
-	bundle := filepath.Join(req.SharedPrefix, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js")
-	for _, dir := range []string{filepath.Dir(bundle), req.SharedAgent} {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for path, data := range map[string]string{bundle: "fixture, never executed",
-		filepath.Join(req.SharedAgent, "settings.json"): `{"packages":["npm:example-package",{"source":"/owned/example","extensions":[]}],"theme":"preserved"}`} {
-		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	_, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	m := shellInstallModel{cancel: cancel, req: req}
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = next.(shellInstallModel)
-	if cmd != nil || m.err != nil || !m.review || m.confirmed {
-		t.Fatalf("review did not inspect without effects: %+v", m)
-	}
-	preview, err := shellinstaller.PreviewUserInstall(req, m.req.Confirmation)
-	if err != nil || preview == "" || m.preview != preview {
-		t.Fatalf("review changed the actual shared preview: %v", err)
-	}
-	for _, disclosure := range []string{"settings.json", "packages before:", "packages after:", "npmCommand after:",
-		"runtime/node/bin/node", "npm-cli.js", "--prefix", "preimages can overwrite later changes", "not uninstall or target deletion"} {
-		if !strings.Contains(preview, disclosure) {
-			t.Fatalf("fixture lacks disclosure %q", disclosure)
-		}
-	}
-	selection := m.req
-	for _, size := range []tea.WindowSizeMsg{{Width: 80, Height: 8}, {Width: 120, Height: 24}, {Width: 20, Height: 1}} {
-		t.Run(fmt.Sprintf("%dx%d", size.Width, size.Height), func(t *testing.T) {
-			next, _ := m.Update(size)
-			page := next.(shellInstallModel)
-			var collected strings.Builder
-			seen := 0
-			for {
-				lines := strings.Split(page.View(), "\n")
-				if len(lines) > size.Height {
-					t.Fatal("preview exceeds terminal height")
-				}
-				for _, line := range lines {
-					if ansi.StringWidth(line) > size.Width {
-						t.Fatal("preview exceeds terminal cell width")
-					}
-				}
-				if size.Height > 1 {
-					lines = lines[:len(lines)-1] // Exclude only the navigation footer.
-				}
-				collected.WriteString(strings.Join(lines[max(0, seen-page.scroll):], ""))
-				seen = page.scroll + len(lines)
-				next, cmd := page.Update(tea.KeyMsg{Type: tea.KeyPgDown})
-				advanced := next.(shellInstallModel)
-				if cmd != nil || advanced.req != selection || advanced.preview != preview || !advanced.review || advanced.confirmed {
-					t.Fatal("paging changed disclosure or confirmation authority")
-				}
-				if advanced.scroll == page.scroll {
-					break
-				}
-				page = advanced
-			}
-			if collected.String() != strings.ReplaceAll(m.content(), "\n", "") {
-				t.Fatal("paging did not expose every review byte, including the complete shared preview")
-			}
-		})
-	}
-	if _, err := os.Lstat(req.Destination); !os.IsNotExist(err) {
-		t.Fatalf("review or scrolling created a destination: %v", err)
 	}
 }
 

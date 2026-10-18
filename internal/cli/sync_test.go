@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -2015,11 +2014,9 @@ func TestRunSyncRollbackRestoresClaudeEngramMigrationSource(t *testing.T) {
 			if err != nil || !bytes.Equal(got, file.data) {
 				t.Fatalf("rollback attempt %d did not restore %q bytes: got=%q error=%v", attempt, file.path, got, err)
 			}
-			if runtime.GOOS != "windows" {
-				info, err := os.Stat(file.path)
-				if err != nil || info.Mode().Perm() != file.mode {
-					t.Fatalf("rollback attempt %d did not restore %q mode: got=%v error=%v want=%v", attempt, file.path, info, err, file.mode)
-				}
+			info, err := os.Stat(file.path)
+			if err != nil || info.Mode().Perm() != file.mode {
+				t.Fatalf("rollback attempt %d did not restore %q mode: got=%v error=%v want=%v", attempt, file.path, info, err, file.mode)
 			}
 		}
 	}
@@ -2445,9 +2442,6 @@ func TestCodeGraphGuidanceSyncStepPreservesBrokenSymlinkChain(t *testing.T) {
 }
 
 func TestRestoreSyncFilesNeverWidensZeroMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("exact zero-mode restoration is a POSIX permission contract")
-	}
 	tests := []struct {
 		name  string
 		setup func(t *testing.T) (string, syncFileSnapshot)
@@ -2522,7 +2516,6 @@ func TestCodeGraphConfigHomeMatchesOpenCodePathResolution(t *testing.T) {
 	actualHome := t.TempDir()
 	xdg := filepath.Join(t.TempDir(), "xdg")
 	t.Setenv("HOME", actualHome)
-	t.Setenv("USERPROFILE", actualHome)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	if got := codeGraphConfigHome(actualHome); got != xdg {
@@ -2974,7 +2967,6 @@ func TestRunSyncReleasesRetiredPiSDDAgentsFromCodeGraphManifest(t *testing.T) {
 func TestRunSyncReportsLegacySelectionMigrationPersistenceFailure(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	original := state.InstallState{InstalledAgents: []string{"opencode"}, Persona: "neutral"}
 	if err := state.Write(home, original); err != nil {
 		t.Fatal(err)
@@ -3531,7 +3523,6 @@ func TestNativeReviewSyncPreservesUnknownAndSnapshotsLedger(t *testing.T) {
 		t.Fatalf("saved backup = %q, %v", savedBytes, err)
 	}
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	originalHome, originalBackupHome := osUserHomeDir, backup.UserHomeDirFn
 	originalCommand, originalLookPath := runCommand, cmdLookPath
 	osUserHomeDir = func() (string, error) { return home, nil }
@@ -6507,9 +6498,6 @@ func TestSyncPersonaNeutralRemovesSelectedOpenCodeAgentOnly(t *testing.T) {
 }
 
 func TestSyncOpenCodeSettingsWritersRollbackSelectedJSONC(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX mode assertions do not apply on Windows")
-	}
 	for _, component := range []model.ComponentID{model.ComponentPersona, model.ComponentPermission, model.ComponentContext7, model.ComponentEngram} {
 		t.Run(string(component), func(t *testing.T) {
 			home, workspace, selected, decoy, before := themeSettingsFixture(t)

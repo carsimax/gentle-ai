@@ -303,9 +303,8 @@ func TestSelfUpdate_PrintsRestartMessage(t *testing.T) {
 		},
 	}
 
-	// restartAfterGentleAIUpgrade is OS-agnostic after task 4.6 — prints and returns.
-	// No goOS swap needed; the behavior is identical on all platforms.
-	for _, osName := range []string{"darwin", "windows", "linux"} {
+	// restartAfterGentleAIUpgrade prints and returns.
+	for _, osName := range []string{"darwin"} {
 		t.Run("os="+osName, func(t *testing.T) {
 			stubs := swapSelfUpdateDeps(t, checkResults, upgradeReport)
 

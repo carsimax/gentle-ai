@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -34,14 +33,7 @@ func TestShellInstallFlags(t *testing.T) {
 func TestShellInstallChannelMatchesPlatform(t *testing.T) {
 	for _, channel := range []string{"main", "stable"} {
 		req, _, err := parseShellInstall([]string{"--target", "/owned/shell", "--channel", channel}, io.Discard)
-		if runtime.GOOS == "windows" {
-			entry := shellEntryValues(req)
-			if err != nil || entry[len(entry)-1] != channel {
-				t.Fatalf("Windows channel did not reach the worker: %q, %v", entry, err)
-			}
-			continue
-		}
-		if err == nil || !strings.Contains(err.Error(), "Windows-only") || req != (shellinstaller.UserInstallRequest{}) {
+		if err == nil || !strings.Contains(err.Error(), "not supported on macOS") || req != (shellinstaller.UserInstallRequest{}) {
 			t.Fatalf("explicit --channel %s was ignored instead of refused: %+v, %v", channel, req, err)
 		}
 	}
@@ -66,9 +58,6 @@ func TestShellInstallRefusalHelpIsRunnable(t *testing.T) {
 }
 
 func TestShellInstallConfirmationRefusalHasNoEffects(t *testing.T) {
-	if platform := runtime.GOOS + "/" + runtime.GOARCH; platform != "linux/amd64" && platform != "darwin/arm64" {
-		t.Skip("physical user selection is Linux amd64 or macOS arm64 only")
-	}
 	parent := t.TempDir()
 	if err := os.Chmod(parent, 0700); err != nil {
 		t.Fatal(err)

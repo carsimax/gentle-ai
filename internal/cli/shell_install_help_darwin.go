@@ -24,7 +24,7 @@ a descendant that calls setsid escapes the group and is not reaped;
 there is no memory cap; the process limit counts every process of your user.
 Installer writes use F_FULLFSYNC and refuse filesystems without it;
 the Node helper falls back to a weaker fsync there.
-No --channel: channel selection is Windows-only.
+No --channel: channel selection is not supported on macOS.
 `
 
 const shellInstallTitle = "Gentle Shell macOS user installer"
