@@ -95,7 +95,7 @@ func TestRunStrategy_GoInstallUpgrade(t *testing.T) {
 		},
 		LatestVersion: "0.4.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err != nil {
@@ -120,18 +120,17 @@ func TestRunStrategy_GoInstallUpgrade(t *testing.T) {
 // .../v4/... and a v3 binary targeting v2.0.0 composes .../v2/....
 //
 // The composition happens inside goInstallUpgrade, which is reached from
-// runStrategy only on a Windows profile with Go on PATH and a declared
-// GoImportPath — gentleAISelfUpgradeMethod routes gentle-ai on Linux and
-// macOS to InstallBinary (the minisign-verified release download) and the
-// beta channel bypasses this path through goInstallMainUpgrade. The previous
-// rewrite used a Linux profile and never reached the composition: the
-// routing went straight to binaryUpgrade and the test failed on
-// ErrReleaseTrustUnavailable. The preflight gate inside goInstallUpgrade is
-// satisfied the same way as
-// TestWindowsBetaGentleAIUpgradeUsesShippedRegistryGoTarget: a fake binary
-// is written into a temp GOBIN, lookPathFn resolves "gentle-ai" to that
-// path, and execCommand hands a synthetic GOBIN back to goInstallDestinationDir.
+// runStrategy only for an unanchored source build with Go on PATH and a
+// declared GoImportPath — gentleAISelfUpgradeMethod routes anchored release
+// builds to InstallBinary (the minisign-verified release download) and the
+// beta channel bypasses this path through goInstallMainUpgrade. A fake binary
+// is written into a temp GOBIN, lookPathFn resolves "gentle-ai" to that path,
+// and execCommand hands a synthetic GOBIN back to goInstallDestinationDir.
 func TestRunStrategy_GoInstallUpgradeCrossMajorDerivesSuffixFromVersion(t *testing.T) {
+	originalKeys := releaseMinisignPublicKeys
+	releaseMinisignPublicKeys = unsetReleaseMinisignPublicKeys
+	t.Cleanup(func() { releaseMinisignPublicKeys = originalKeys })
+
 	var tool update.ToolInfo
 	for _, candidate := range update.Tools {
 		if candidate.Name == "gentle-ai" {
@@ -163,7 +162,7 @@ func TestRunStrategy_GoInstallUpgradeCrossMajorDerivesSuffixFromVersion(t *testi
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			gobin := t.TempDir()
-			destination := writeFakeBinary(t, gobin, "gentle-ai.exe")
+			destination := writeFakeBinary(t, gobin, "gentle-ai")
 
 			origLookPath := lookPathFn
 			t.Cleanup(func() { lookPathFn = origLookPath })
@@ -188,7 +187,7 @@ func TestRunStrategy_GoInstallUpgradeCrossMajorDerivesSuffixFromVersion(t *testi
 				LatestVersion: tc.latestVer,
 				Status:        update.UpdateAvailable,
 			}
-			profile := system.PlatformProfile{OS: "windows", PackageManager: "winget", GoAvailable: true, Supported: true}
+			profile := system.PlatformProfile{OS: "darwin", GoAvailable: true, Supported: true}
 
 			if _, err := runStrategy(context.Background(), r, profile); err != nil {
 				t.Fatalf("runStrategy: %v", err)
@@ -228,7 +227,7 @@ func TestRunStrategy_BetaGentleAISelfUpgradeUsesGoInstallMain(t *testing.T) {
 		BetaModulePath: "github.com/gentleman-programming/gentle-ai/v4",
 		Status:         update.UpdateAvailable,
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt", Supported: true}
+	profile := system.PlatformProfile{OS: "darwin", Supported: true}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err != nil {
@@ -267,7 +266,7 @@ func TestBetaInstallRejectsUnverifiedTargetBeforeMutation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := update.UpdateResult{Tool: tool, LatestVersion: tc.version, BetaCommit: tc.sha, BetaModulePath: tc.module, Status: update.UpdateAvailable}
-			_, err := runStrategy(context.Background(), r, system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+			_, err := runStrategy(context.Background(), r, system.PlatformProfile{OS: "darwin"})
 			if err == nil || called {
 				t.Fatalf("unverified target should not execute: err=%v, called=%v", err, called)
 			}
@@ -316,7 +315,7 @@ func TestRunStrategy_GoInstallMissingImportPath(t *testing.T) {
 		},
 		LatestVersion: "0.4.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err == nil {
@@ -334,7 +333,7 @@ func TestRunStrategy_UnsupportedMethodManualFallback(t *testing.T) {
 		},
 		LatestVersion: "1.0.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	// Unsupported method → manual fallback error.
@@ -386,97 +385,11 @@ func TestRunStrategy_GoInstallFailure(t *testing.T) {
 		},
 		LatestVersion: "0.4.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err == nil {
 		t.Errorf("expected error when go install fails, got nil")
-	}
-}
-
-// TestEffectiveMethodGentleAIOnWindowsUsesFailClosedBinaryPolicy verifies that
-// Windows never routes gentle-ai through a remote installer, and that when no
-// usable `go install` target is declared it falls back to the binary strategy —
-// which on Windows is an explicit refusal naming a runnable source-install
-// command, not a download.
-func TestEffectiveMethodGentleAIOnWindowsUsesFailClosedBinaryPolicy(t *testing.T) {
-	tests := []struct {
-		name string
-		tool update.ToolInfo
-	}{
-		{
-			name: "binary remains policy boundary",
-			tool: update.ToolInfo{Name: "gentle-ai", InstallMethod: update.InstallBinary},
-		},
-		{
-			name: "legacy script declaration is disabled",
-			tool: update.ToolInfo{Name: "gentle-ai", InstallMethod: update.InstallScript},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			profile := system.PlatformProfile{OS: "windows", PackageManager: "winget", GoAvailable: true}
-			method := effectiveMethod(tc.tool, profile)
-			if method != update.InstallBinary {
-				t.Errorf("effectiveMethod(%q) = %q, want %q", tc.tool.Name, method, update.InstallBinary)
-			}
-		})
-	}
-
-	// Renamed from "Go availability still requires an explicit source install",
-	// which encoded the previous policy: Windows refused to self-upgrade even
-	// with Go on PATH. That policy has been changed deliberately. No signed
-	// Windows binary is published, so there is no asset to download and verify
-	// with minisign; a pinned `go install <importPath>@vX.Y.Z` — still checked
-	// against the Go checksum database, since goInstallUpgrade does not touch
-	// cmd.Env — is the only automatic upgrade path Windows has.
-	t.Run("Go availability upgrades through a pinned go install", func(t *testing.T) {
-		tool := update.ToolInfo{Name: "gentle-ai", InstallMethod: update.InstallBinary, GoImportPath: "github.com/Gentleman-Programming/gentle-ai/v3/cmd/gentle-ai"}
-		profile := system.PlatformProfile{OS: "windows", PackageManager: "winget", GoAvailable: true}
-		method := effectiveMethod(tool, profile)
-		if method != update.InstallGoInstall {
-			t.Errorf("effectiveMethod(%q) = %q, want %q", tool.Name, method, update.InstallGoInstall)
-		}
-	})
-}
-
-// --- TestEffectiveMethod_NonGentleAIToolsOnWindowsUseBinary ---
-
-// TestEffectiveMethod_NonGentleAIToolsOnWindowsUseBinary verifies that tools
-// OTHER than gentle-ai on Windows still use their declared install method
-// (binary, script, etc.).
-func TestEffectiveMethod_NonGentleAIToolsOnWindowsUseBinary(t *testing.T) {
-	tests := []struct {
-		name string
-		tool update.ToolInfo
-		want update.InstallMethod
-	}{
-		{
-			name: "engram uses binary",
-			tool: update.ToolInfo{Name: "engram", InstallMethod: update.InstallBinary},
-			want: update.InstallBinary,
-		},
-		{
-			name: "gga uses script",
-			tool: update.ToolInfo{Name: "gga", InstallMethod: update.InstallScript},
-			want: update.InstallScript,
-		},
-		{
-			name: "unknown tool uses binary",
-			tool: update.ToolInfo{Name: "other", InstallMethod: update.InstallBinary},
-			want: update.InstallBinary,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			profile := system.PlatformProfile{OS: "windows", PackageManager: "winget", GoAvailable: true}
-			method := effectiveMethod(tc.tool, profile)
-			if method != tc.want {
-				t.Errorf("effectiveMethod(%q) = %q, want %q", tc.tool.Name, method, tc.want)
-			}
-		})
 	}
 }
 
@@ -527,21 +440,21 @@ func TestEffectiveMethod(t *testing.T) {
 			want:    update.InstallGoInstall,
 		},
 		{
-			name:    "apt profile respects declared method (go-install)",
+			name:    "non-brew profile respects declared method (go-install)",
 			tool:    update.ToolInfo{Name: "engram", InstallMethod: update.InstallGoInstall},
-			profile: system.PlatformProfile{PackageManager: "apt"},
+			profile: system.PlatformProfile{},
 			want:    update.InstallGoInstall,
 		},
 		{
-			name:    "apt profile respects declared method (binary)",
+			name:    "non-brew profile respects declared method (binary)",
 			tool:    update.ToolInfo{Name: "gga", InstallMethod: update.InstallBinary},
-			profile: system.PlatformProfile{PackageManager: "apt"},
+			profile: system.PlatformProfile{},
 			want:    update.InstallBinary,
 		},
 		{
-			name:    "apt profile respects declared method (script)",
+			name:    "non-brew profile respects declared method (script)",
 			tool:    update.ToolInfo{Name: "gga", InstallMethod: update.InstallScript},
-			profile: system.PlatformProfile{PackageManager: "apt"},
+			profile: system.PlatformProfile{},
 			want:    update.InstallScript,
 		},
 		// Auto-detect order: brew-owned package → go-install → binary (issue #246).
@@ -555,19 +468,19 @@ func TestEffectiveMethod(t *testing.T) {
 		{
 			name:    "auto-detect: brew missing + go available + GoImportPath set → go-install",
 			tool:    update.ToolInfo{Name: "mytool", InstallMethod: update.InstallBinary, GoImportPath: "github.com/example/mytool/cmd/mytool"},
-			profile: system.PlatformProfile{PackageManager: "apt", GoAvailable: true},
+			profile: system.PlatformProfile{GoAvailable: true},
 			want:    update.InstallGoInstall,
 		},
 		{
 			name:    "auto-detect: brew missing + go missing + GoImportPath set → binary fallback",
 			tool:    update.ToolInfo{Name: "mytool", InstallMethod: update.InstallBinary, GoImportPath: "github.com/example/mytool/cmd/mytool"},
-			profile: system.PlatformProfile{PackageManager: "apt", GoAvailable: false},
+			profile: system.PlatformProfile{GoAvailable: false},
 			want:    update.InstallBinary,
 		},
 		{
 			name:    "auto-detect: go available but GoImportPath empty → binary (no upgrade)",
 			tool:    update.ToolInfo{Name: "mytool", InstallMethod: update.InstallBinary, GoImportPath: ""},
-			profile: system.PlatformProfile{PackageManager: "apt", GoAvailable: true},
+			profile: system.PlatformProfile{GoAvailable: true},
 			want:    update.InstallBinary,
 		},
 	}
@@ -814,26 +727,6 @@ Run brew trust --cask gentleman-programming/tap/engram to trust it.`
 	}
 }
 
-func TestHomebrewFailureAdviceBubblewrap(t *testing.T) {
-	output := `Error: Bubblewrap is installed but cannot create a rootless sandbox.
-Homebrew's Linux sandbox requires rootless Bubblewrap and unprivileged user namespaces.`
-	advice := homebrewFailureAdvice("gentle-ai", output)
-	if strings.Contains(strings.ToLower(advice), "preferred fix") {
-		t.Fatalf("bubblewrap advice must not frame host policy changes as preferred defaults:\n%s", advice)
-	}
-	for _, want := range []string{
-		"explicit admin/security decision",
-		"sudo sysctl -w kernel.unprivileged_userns_clone=1",
-		"sudo sysctl -w user.max_user_namespaces=28633",
-		"sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true",
-		"HOMEBREW_NO_SANDBOX_LINUX=1 brew upgrade --formula gentle-ai",
-	} {
-		if !strings.Contains(advice, want) {
-			t.Fatalf("bubblewrap advice missing %q:\n%s", want, advice)
-		}
-	}
-}
-
 // --- verify exec.Cmd.Run() failure is correctly wrapped ---
 func TestRunStrategy_ExecErrorWrapped(t *testing.T) {
 	origExecCommand := execCommand
@@ -914,9 +807,8 @@ func TestRunStrategy_ScriptUpgradeSuccess(t *testing.T) {
 		},
 		LatestVersion: "2.8.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
 
-	err := scriptUpgrade(context.Background(), r, profile)
+	err := scriptUpgrade(context.Background(), r)
 	if err != nil {
 		t.Fatalf("scriptUpgrade: unexpected error: %v", err)
 	}
@@ -955,44 +847,10 @@ func TestRunStrategy_ScriptUpgradeDownloadFailure(t *testing.T) {
 		},
 		LatestVersion: "2.8.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
 
-	err := scriptUpgrade(context.Background(), r, profile)
+	err := scriptUpgrade(context.Background(), r)
 	if err == nil {
 		t.Errorf("expected error when install.sh download fails, got nil")
-	}
-}
-
-// --- TestRunStrategy_ScriptUpgradeWindowsManualFallback ---
-
-func TestRunStrategy_ScriptUpgradeWindowsManualFallback(t *testing.T) {
-	origExecCommand := execCommand
-	t.Cleanup(func() { execCommand = origExecCommand })
-
-	execCalled := false
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		execCalled = true
-		return mockCmd("echo", "should not run")
-	}
-
-	r := update.UpdateResult{
-		Tool: update.ToolInfo{
-			Name:          "gga",
-			Owner:         "Gentleman-Programming",
-			Repo:          "gentleman-guardian-angel",
-			InstallMethod: update.InstallScript,
-		},
-		LatestVersion: "2.8.0",
-	}
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
-
-	err := scriptUpgrade(context.Background(), r, profile)
-	if err == nil {
-		t.Errorf("expected manual fallback error for Windows script upgrade, got nil")
-	}
-
-	if execCalled {
-		t.Errorf("exec should NOT be called for Windows script manual fallback")
 	}
 }
 
@@ -1006,12 +864,9 @@ func TestRunStrategy_ScriptUpgradeWindowsManualFallback(t *testing.T) {
 // version being upgraded to, not whatever is on main at upgrade time.
 func TestGGAScriptUpgradeUsesGitClone(t *testing.T) {
 	origExecCommand := execCommand
-	origDetectOS := detectOS
 	t.Cleanup(func() {
 		execCommand = origExecCommand
-		detectOS = origDetectOS
 	})
-	detectOS = func() string { return "linux" }
 
 	type call struct {
 		name string
@@ -1097,43 +952,6 @@ func TestGGAScriptUpgradeUsesGitClone(t *testing.T) {
 	}
 }
 
-// --- TestGGAScriptUpgradeWindowsManualFallback ---
-
-// TestGGAScriptUpgradeWindowsManualFallback verifies that on Windows,
-// ggaScriptUpgrade returns a ManualFallbackError without calling exec.
-func TestGGAScriptUpgradeWindowsManualFallback(t *testing.T) {
-	origExecCommand := execCommand
-	t.Cleanup(func() { execCommand = origExecCommand })
-
-	execCalled := false
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		execCalled = true
-		return mockCmd("echo", "should not run")
-	}
-
-	r := update.UpdateResult{
-		Tool: update.ToolInfo{
-			Name:          "gga",
-			Owner:         "Gentleman-Programming",
-			Repo:          "gentleman-guardian-angel",
-			InstallMethod: update.InstallScript,
-		},
-		LatestVersion: "2.8.0",
-	}
-
-	err := ggaScriptUpgradeForOS(context.Background(), r, "windows")
-	if err == nil {
-		t.Errorf("expected ManualFallbackError for Windows, got nil")
-	}
-	var mfe *ManualFallbackError
-	if !errors.As(err, &mfe) {
-		t.Errorf("expected *ManualFallbackError, got %T: %v", err, err)
-	}
-	if execCalled {
-		t.Errorf("exec should NOT be called on Windows for ggaScriptUpgrade")
-	}
-}
-
 // --- TestRunStrategy_GGAUsesGitClone ---
 
 // TestRunStrategy_GGAUsesGitClone verifies that when runStrategy is called with
@@ -1141,12 +959,9 @@ func TestGGAScriptUpgradeWindowsManualFallback(t *testing.T) {
 // rather than the generic scriptUpgrade (bash -c <content>).
 func TestRunStrategy_GGAUsesGitClone(t *testing.T) {
 	origExecCommand := execCommand
-	origDetectOS := detectOS
 	t.Cleanup(func() {
 		execCommand = origExecCommand
-		detectOS = origDetectOS
 	})
-	detectOS = func() string { return "linux" }
 
 	type call struct {
 		name string
@@ -1168,7 +983,7 @@ func TestRunStrategy_GGAUsesGitClone(t *testing.T) {
 		},
 		LatestVersion: "2.8.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err != nil {
@@ -1253,59 +1068,10 @@ func TestInstallScriptURL(t *testing.T) {
 
 // --- TestEngramUpgradeUsesDownloadNotGoInstall ---
 
-// TestEngramUpgradeUsesDownloadNotGoInstall verifies that on Windows (non-brew),
-// engram upgrade calls the binary download function, NOT go install.
+// TestEngramUpgradeUsesDownloadNotGoInstall verifies that without Homebrew,
+// engram upgrade uses the binary download function, not go install.
 // This is the regression test for issue #160.
 func TestEngramUpgradeUsesDownloadNotGoInstall(t *testing.T) {
-	origExecCommand := execCommand
-	origEngramDownloadFn := engramDownloadFn
-	t.Cleanup(func() {
-		execCommand = origExecCommand
-		engramDownloadFn = origEngramDownloadFn
-	})
-
-	execCalled := false
-	execCommand = func(name string, args ...string) *exec.Cmd {
-		execCalled = true
-		return mockCmd("echo", "should not be called")
-	}
-
-	downloadCalled := false
-	engramDownloadFn = func(profile system.PlatformProfile) (string, error) {
-		downloadCalled = true
-		return "/fake/path/engram.exe", nil
-	}
-
-	r := update.UpdateResult{
-		Tool: update.ToolInfo{
-			Name:          "engram",
-			Owner:         "Gentleman-Programming",
-			Repo:          "engram",
-			InstallMethod: update.InstallBinary, // should be InstallBinary after fix
-		},
-		LatestVersion: "0.5.0",
-	}
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
-
-	_, err := runStrategy(context.Background(), r, profile)
-	if err != nil {
-		t.Fatalf("runStrategy engram windows: unexpected error: %v", err)
-	}
-
-	// Must call binary download, NOT go install.
-	if !downloadCalled {
-		t.Errorf("expected engramDownloadFn to be called, but it was not")
-	}
-	if execCalled {
-		t.Errorf("exec (go install) should NOT be called for engram on Windows — use binary download")
-	}
-}
-
-// --- TestEngramUpgradeLinuxUsesDownload ---
-
-// TestEngramUpgradeLinuxUsesDownload verifies that on Linux (non-brew),
-// engram upgrade uses the binary download function, not go install.
-func TestEngramUpgradeLinuxUsesDownload(t *testing.T) {
 	origExecCommand := execCommand
 	origEngramDownloadFn := engramDownloadFn
 	t.Cleanup(func() {
@@ -1334,18 +1100,18 @@ func TestEngramUpgradeLinuxUsesDownload(t *testing.T) {
 		},
 		LatestVersion: "0.5.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 
 	_, err := runStrategy(context.Background(), r, profile)
 	if err != nil {
-		t.Fatalf("runStrategy engram linux: unexpected error: %v", err)
+		t.Fatalf("runStrategy engram: unexpected error: %v", err)
 	}
 
 	if !downloadCalled {
-		t.Errorf("expected engramDownloadFn to be called for engram on Linux, but it was not")
+		t.Errorf("expected engramDownloadFn to be called for engram, but it was not")
 	}
 	if execCalled {
-		t.Errorf("exec (go install) should NOT be called for engram on Linux — use binary download")
+		t.Errorf("exec (go install) should NOT be called for engram — use binary download")
 	}
 }
 
@@ -1384,9 +1150,8 @@ func TestRunStrategy_ScriptUpgradeExecFailure(t *testing.T) {
 		},
 		LatestVersion: "2.8.0",
 	}
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
 
-	err := scriptUpgrade(context.Background(), r, profile)
+	err := scriptUpgrade(context.Background(), r)
 	if err == nil {
 		t.Errorf("expected error when install.sh execution fails, got nil")
 	}
@@ -1429,7 +1194,7 @@ func TestEngramBinaryUpgrade_StableChannelCallsDownloadFn(t *testing.T) {
 				return mockCmd("echo", "unexpected")
 			}
 
-			profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+			profile := system.PlatformProfile{OS: "darwin"}
 			err := engramBinaryUpgrade(profile)
 			if err != nil {
 				t.Fatalf("engramBinaryUpgrade stable: unexpected error: %v", err)
@@ -1467,7 +1232,7 @@ func TestEngramBinaryUpgrade_BetaChannelUsesGoInstallMain(t *testing.T) {
 		return "/tmp/engram-beta", nil
 	}
 
-	profile := system.PlatformProfile{OS: "linux", PackageManager: "apt"}
+	profile := system.PlatformProfile{OS: "darwin"}
 	err := engramBinaryUpgrade(profile)
 	if err != nil {
 		t.Fatalf("engramBinaryUpgrade beta: unexpected error: %v", err)

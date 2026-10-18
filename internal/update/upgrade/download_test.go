@@ -76,15 +76,6 @@ func TestAssetURLResolution(t *testing.T) {
 		wantSubstr string
 	}{
 		{
-			name:       "darwin amd64",
-			owner:      "Gentleman-Programming",
-			repo:       "gentle-ai",
-			version:    "1.5.0",
-			goos:       "darwin",
-			goarch:     "amd64",
-			wantSubstr: "darwin",
-		},
-		{
 			name:       "darwin arm64",
 			owner:      "Gentleman-Programming",
 			repo:       "gentle-ai",
@@ -94,21 +85,12 @@ func TestAssetURLResolution(t *testing.T) {
 			wantSubstr: "arm64",
 		},
 		{
-			name:       "linux amd64",
-			owner:      "Gentleman-Programming",
-			repo:       "gga",
-			version:    "2.0.0",
-			goos:       "linux",
-			goarch:     "amd64",
-			wantSubstr: "linux",
-		},
-		{
 			name:       "contains version",
 			owner:      "Gentleman-Programming",
 			repo:       "gentle-ai",
 			version:    "1.5.0",
 			goos:       "darwin",
-			goarch:     "amd64",
+			goarch:     "arm64",
 			wantSubstr: "1.5.0",
 		},
 	}
@@ -132,10 +114,6 @@ func TestAssetURLResolution(t *testing.T) {
 // TestDownloadAndExtract uses an httptest.Server to serve a fake tar.gz
 // and verifies that the binary is extracted to a temp file.
 func TestDownloadAndExtract(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("binary download not supported on Windows in Phase 1")
-	}
-
 	binaryName := "fake-tool"
 	tarPath := makeFakeTarGz(t, binaryName)
 	tarContent, err := os.ReadFile(tarPath)
@@ -175,10 +153,6 @@ func TestDownloadAndExtract(t *testing.T) {
 // --- TestDownloadAndExtract_NotFoundReturnsError ---
 
 func TestDownloadAndExtract_NotFoundReturnsError(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("binary download not supported on Windows in Phase 1")
-	}
-
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
@@ -200,10 +174,6 @@ func TestDownloadAndExtract_NotFoundReturnsError(t *testing.T) {
 // TestAtomicReplace verifies that atomicReplace replaces the destination file
 // without leaving temp files around.
 func TestAtomicReplace(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("atomic replace uses rename — Windows behavior is different")
-	}
-
 	dir := t.TempDir()
 	src := filepath.Join(dir, "new-binary")
 	dst := filepath.Join(dir, "existing-binary")
@@ -232,32 +202,6 @@ func TestAtomicReplace(t *testing.T) {
 	// Source should no longer exist (it was moved).
 	if _, err := os.Stat(src); !os.IsNotExist(err) {
 		t.Errorf("source file should no longer exist after atomic replace")
-	}
-}
-
-// --- TestDownload_WindowsSkipped ---
-
-// TestDownload_WindowsSkipped is a build-constraint smoke test:
-// calling Download on Windows should return a manual fallback error.
-func TestDownload_WindowsAlwaysManualFallback(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("only runs on Windows")
-	}
-
-	r := update.UpdateResult{
-		Tool: update.ToolInfo{
-			Name:          "gentle-ai",
-			Owner:         "Gentleman-Programming",
-			Repo:          "gentle-ai",
-			InstallMethod: update.InstallBinary,
-		},
-		LatestVersion: "1.5.0",
-	}
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
-
-	err := Download(context.Background(), r, profile)
-	if err == nil {
-		t.Errorf("expected error for Windows binary download, got nil")
 	}
 }
 
@@ -321,7 +265,7 @@ func TestExpectedChecksumFor(t *testing.T) {
 	firstDigest := strings.Repeat("a", sha256.Size*2)
 	secondDigest := strings.Repeat("b", sha256.Size*2)
 	content := firstDigest + "  gentle-ai_1.0.0_darwin_arm64.tar.gz\n" +
-		secondDigest + "  gentle-ai_1.0.0_linux_amd64.tar.gz\n"
+		secondDigest + "  gga_1.0.0_darwin_arm64.tar.gz\n"
 
 	tests := []struct {
 		name     string
@@ -339,13 +283,13 @@ func TestExpectedChecksumFor(t *testing.T) {
 		{
 			name:     "found second entry",
 			content:  content,
-			filename: "gentle-ai_1.0.0_linux_amd64.tar.gz",
+			filename: "gga_1.0.0_darwin_arm64.tar.gz",
 			want:     secondDigest,
 		},
 		{
 			name:     "not found returns error",
 			content:  content,
-			filename: "gentle-ai_1.0.0_windows_amd64.zip",
+			filename: "engram_1.0.0_darwin_arm64.tar.gz",
 			wantErr:  true,
 		},
 		{
@@ -414,10 +358,6 @@ func TestFetchChecksums(t *testing.T) {
 // --- TestDownloadToFile ---
 
 func TestDownloadToFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("binary download not supported on Windows")
-	}
-
 	content := []byte("test archive content")
 	h := sha256.New()
 	h.Write(content)
@@ -451,10 +391,6 @@ func TestDownloadToFile(t *testing.T) {
 // TestDownload_ChecksumVerification exercises all four checksum failure modes
 // from issue #245: match, mismatch, missing checksums.txt, and archive not listed.
 func TestDownload_ChecksumVerification(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("binary download not supported on Windows")
-	}
-
 	binaryName := "fake-tool"
 	privateKey := useTestReleaseKey(t)
 	tarPath := makeFakeTarGz(t, binaryName)
@@ -500,7 +436,7 @@ func TestDownload_ChecksumVerification(t *testing.T) {
 		},
 		{
 			name:            "archive not in checksums.txt returns error",
-			checksumsBody:   strings.Repeat("a", sha256.Size*2) + "  other-tool_1.0.0_linux_amd64.tar.gz\n",
+			checksumsBody:   strings.Repeat("a", sha256.Size*2) + "  other-tool_1.0.0_darwin_arm64.tar.gz\n",
 			checksumsStatus: http.StatusOK,
 			wantErr:         true,
 			errContains:     "not listed in checksums.txt",

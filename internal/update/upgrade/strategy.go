@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -54,14 +53,12 @@ type strategyOutcome struct {
 //
 // Strategy routing:
 //   - brew profile → brewUpgrade (regardless of tool's declared method)
-//   - go-install method + apt/pacman/other → goInstallUpgrade
-//   - binary method + linux/darwin → binaryUpgrade
-//   - binary method + windows → manualFallback (gentle-ai explains the signed-distribution hold)
-//   - script method + linux/darwin + gga → ggaScriptUpgrade (git clone approach)
-//   - script method + linux/darwin + other → scriptUpgrade (curl | bash install.sh)
-//   - script method + windows → manualFallback
+//   - go-install method → goInstallUpgrade
+//   - binary method → binaryUpgrade
+//   - script method + gga → ggaScriptUpgrade (git clone approach)
+//   - script method + other → scriptUpgrade (curl | bash install.sh)
 //   - unknown method → manualFallback with explicit message
-func runStrategy(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile, preflightDestination ...string) (bool, error) {
+func runStrategy(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile) (bool, error) {
 	ownership := update.HomebrewNone
 	if profile.PackageManager == "brew" {
 		var err error
@@ -70,7 +67,7 @@ func runStrategy(ctx context.Context, r update.UpdateResult, profile system.Plat
 			return false, fmt.Errorf("detect Homebrew ownership for %s: %w", r.Tool.Name, err)
 		}
 	}
-	if isBetaGentleAIUpgrade(r) && profile.OS != "windows" && ownership == update.HomebrewNone {
+	if isBetaGentleAIUpgrade(r) && ownership == update.HomebrewNone {
 		return false, goInstallMainUpgrade(r)
 	}
 
@@ -83,7 +80,7 @@ func runStrategy(ctx context.Context, r update.UpdateResult, profile system.Plat
 	case update.InstallBrew:
 		return false, brewUpgrade(ctx, r, ownership)
 	case update.InstallGoInstall:
-		return false, goInstallUpgrade(ctx, r, profile, firstString(preflightDestination))
+		return false, goInstallUpgrade(ctx, r)
 	case update.InstallBinary:
 		return false, binaryUpgrade(ctx, r, profile)
 	case update.InstallScript:
@@ -95,7 +92,7 @@ func runStrategy(ctx context.Context, r update.UpdateResult, profile system.Plat
 		if r.Tool.Name == "gga" {
 			return false, ggaScriptUpgrade(ctx, r)
 		}
-		return false, scriptUpgrade(ctx, r, profile)
+		return false, scriptUpgrade(ctx, r)
 	default:
 		return false, &ManualFallbackError{
 			Hint: fmt.Sprintf("upgrade %q: unsupported install method %q — please update manually. See: https://github.com/Gentleman-Programming/%s",
@@ -104,8 +101,8 @@ func runStrategy(ctx context.Context, r update.UpdateResult, profile system.Plat
 	}
 }
 
-func runStrategyWithOutcome(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile, preflightDestination ...string) (strategyOutcome, error) {
-	exitRequested, err := runStrategy(ctx, r, profile, preflightDestination...)
+func runStrategyWithOutcome(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile) (strategyOutcome, error) {
+	exitRequested, err := runStrategy(ctx, r, profile)
 	return strategyOutcome{exitRequested: exitRequested}, err
 }
 
@@ -219,22 +216,14 @@ func homebrewFailureAdvice(toolName string, output string, detected ...update.Ho
 		return fmt.Sprintf("Homebrew requires explicit trust for external taps. Trust only this Gentle AI %s, then retry:\n  brew trust %s %s\n  brew upgrade %s %s", artifact, flag, ref, flag, toolName)
 	}
 
-	if strings.Contains(lower, "bubblewrap is installed but cannot create a rootless sandbox") ||
-		strings.Contains(lower, "rootless sandbox") ||
-		strings.Contains(lower, "homebrew_no_sandbox_linux") {
-		return "Homebrew on Linux could not create its Bubblewrap rootless sandbox. This requires an explicit admin/security decision: enabling unprivileged user namespaces lets Homebrew use its sandbox but changes host kernel/AppArmor policy. If acceptable, run:\n  sudo sysctl -w kernel.unprivileged_userns_clone=1\n  sudo sysctl -w user.max_user_namespaces=28633\n  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true\n\nFinal workaround if your distro policy forbids this sandbox:\n  HOMEBREW_NO_SANDBOX_LINUX=1 brew upgrade " + flag + " " + toolName
-	}
-
 	return ""
 }
 
 // goInstallUpgrade runs `go install <importPath>@v<version>`.
 //
-// Generic Go-managed tools retain the post-install warning because the new
-// binary was genuinely written. Windows gentle-ai self-upgrades are different:
-// they must prove that Go owns the active executable before writing, or skip to
-// a manual recovery instead of creating a second PATH-visible binary.
-func goInstallUpgrade(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile, preflightDestination string) error {
+// Go-managed tools retain the post-install warning because the new binary was
+// genuinely written.
+func goInstallUpgrade(ctx context.Context, r update.UpdateResult) error {
 	tool := r.Tool
 	latestVersion := r.LatestVersion
 	if tool.GoImportPath == "" {
@@ -244,14 +233,7 @@ func goInstallUpgrade(ctx context.Context, r update.UpdateResult, profile system
 	// GOBIN/GOPATH are static Go configuration that `go install` does not
 	// change, so they are read up front; the PATH lookup happens afterwards so
 	// a first-time install resolves correctly.
-	destDir := preflightDestination
-	var destErr error
-	if destDir == "" {
-		destDir, destErr = goInstallDestinationDir()
-		if err := preflightWindowsGentleAIGoInstallWithDestination(r, profile, destDir, destErr); err != nil {
-			return err
-		}
-	}
+	destDir, destErr := goInstallDestinationDir()
 
 	// Pin release installs to their exact version. The /vN suffix is derived
 	// from the target version via ModulePathForVersion so a v2 binary
@@ -275,76 +257,8 @@ func goInstallUpgrade(ctx context.Context, r update.UpdateResult, profile system
 		return fmt.Errorf("go install %s: %w (output: %s)", target, err, string(out))
 	}
 
-	warnGoInstallDestination(tool.Name, detectOS(), destDir, destErr)
+	warnGoInstallDestination(tool.Name, destDir, destErr)
 	return nil
-}
-
-func preflightWindowsGentleAIGoInstall(r update.UpdateResult, profile system.PlatformProfile) (string, error) {
-	if profile.OS != "windows" || r.Tool.Name != "gentle-ai" {
-		return "", nil
-	}
-	destDir, destErr := goInstallDestinationDir()
-	if err := preflightWindowsGentleAIGoInstallWithDestination(r, profile, destDir, destErr); err != nil {
-		return "", err
-	}
-	return destDir, nil
-}
-
-func firstString(values []string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	return values[0]
-}
-
-func preflightWindowsGentleAIGoInstallWithDestination(r update.UpdateResult, profile system.PlatformProfile, destDir string, destErr error) error {
-	if profile.OS != "windows" || r.Tool.Name != "gentle-ai" {
-		return nil
-	}
-	if destErr != nil {
-		return &ManualFallbackError{Hint: gentleAIWindowsGoInstallProvenanceHint(r, "", "")}
-	}
-
-	destination := absoluteBinaryPath(filepath.Join(destDir, goInstallBinaryName(r.Tool.Name, profile.OS)))
-	active, err := lookPathFn(r.Tool.Name)
-	if err != nil {
-		return &ManualFallbackError{Hint: gentleAIWindowsGoInstallProvenanceHint(r, destination, "")}
-	}
-	active = absoluteBinaryPath(active)
-	if !sameBinaryPathForOS(destination, active, profile.OS) {
-		return &ManualFallbackError{Hint: gentleAIWindowsGoInstallProvenanceHint(r, destination, active)}
-	}
-	return nil
-}
-
-func gentleAIWindowsGoInstallProvenanceHint(r update.UpdateResult, destination, active string) string {
-	details := "could not determine the Go installation destination"
-	switch {
-	case destination != "" && active == "":
-		details = fmt.Sprintf("could not resolve the active gentle-ai executable before Go would write to %s", destination)
-	case destination != "" && active != "":
-		details = fmt.Sprintf("resolves gentle-ai to %s, but Go would write to %s", active, destination)
-	}
-
-	hint := fmt.Sprintf("Windows self-upgrade %s. No files were changed. ", details)
-	if active != "" {
-		hint += fmt.Sprintf("Keep %s as the active installation, or intentionally migrate to %s with:\n  ", active, destination)
-	} else {
-		hint += "Confirm the active installation, then intentionally migrate with:\n  "
-	}
-	if isBetaGentleAIUpgrade(r) {
-		command, err := update.ValidatedBetaSourceInstallCommand(r)
-		if err != nil {
-			return hint + "Beta target metadata is unavailable; rerun the update check."
-		}
-		hint += command
-	} else {
-		hint += update.GentleAISourceInstallCommand(r.LatestVersion)
-	}
-	if destination != "" {
-		hint += fmt.Sprintf("\nAfter a successful migration, ensure only %s resolves for gentle-ai on PATH.", destination)
-	}
-	return hint
 }
 
 func isBetaGentleAIUpgrade(r update.UpdateResult) bool {
@@ -370,7 +284,7 @@ func goInstallMainUpgrade(r update.UpdateResult) error {
 		return fmt.Errorf("go install %s: %w (output: %s)", target, err, strings.TrimSpace(string(out)))
 	}
 
-	warnGoInstallDestination(r.Tool.Name, detectOS(), destDir, destErr)
+	warnGoInstallDestination(r.Tool.Name, destDir, destErr)
 	return nil
 }
 
@@ -425,44 +339,26 @@ func prependGoPattern(existing, pattern string) string {
 
 // binaryUpgrade handles binary-release upgrades via GitHub Releases asset download.
 //
-// engram has its own cross-platform binary downloader (DownloadLatestBinary) that
-// works on all platforms including Windows. Other Windows binary upgrades return
-// ManualFallbackError so the executor surfaces them as UpgradeSkipped.
+// engram has its own binary downloader (DownloadLatestBinary); other tools
+// delegate to the download package.
 func binaryUpgrade(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile) error {
 	if needsSourceBuildManualUpgrade(r, profile) {
 		return &ManualFallbackError{Hint: gentleAISourceBuildUpgradeHint(r)}
 	}
-	if profile.OS == "windows" && r.Tool.Name == "gentle-ai" {
-		return &ManualFallbackError{Hint: gentleAIWindowsSourceInstallHint(r)}
-	}
-
 	// engram: always use its dedicated binary downloader regardless of platform
 	// (except brew, which is handled by effectiveMethod before we get here).
 	if r.Tool.Name == "engram" {
 		return engramBinaryUpgrade(profile)
 	}
 
-	if profile.OS == "windows" {
-		// Windows binary auto-upgrade is not supported for generic tools yet.
-		// Return a ManualFallbackError so the executor surfaces this as UpgradeSkipped
-		// with an actionable hint — NOT as UpgradeFailed.
-		hint := r.UpdateHint
-		if hint == "" {
-			hint = fmt.Sprintf("Download manually from https://github.com/Gentleman-Programming/%s/releases", r.Tool.Repo)
-		}
-		return &ManualFallbackError{
-			Hint: fmt.Sprintf("upgrade %q on Windows requires manual update: %s", r.Tool.Name, hint),
-		}
-	}
-
-	// For Linux/macOS binary installs: delegate to the download package.
+	// Delegate to the download package.
 	return downloadAndReplace(ctx, r, profile)
 }
 
 // isUnanchoredSourceBuild recognizes the intentional source-build sentinel,
 // never a failed key parse or signature verification.
 func isUnanchoredSourceBuild(profile system.PlatformProfile) bool {
-	return (profile.OS == "linux" || profile.OS == "darwin") && releaseMinisignPublicKeys == unsetReleaseMinisignPublicKeys
+	return profile.OS == "darwin" && releaseMinisignPublicKeys == unsetReleaseMinisignPublicKeys
 }
 
 func needsSourceBuildManualUpgrade(r update.UpdateResult, profile system.PlatformProfile) bool {
@@ -475,12 +371,6 @@ func gentleAISourceBuildUpgradeHint(r update.UpdateResult) string {
 	return "This source build has no embedded release trust anchor. " +
 		"Automatic source upgrade requires Go on PATH and a declared Go import path. " +
 		"No files were changed. Install/update from source with Go 1.25.10+:\n  " +
-		gentleAISourceCommandForResult(r)
-}
-
-func gentleAIWindowsSourceInstallHint(r update.UpdateResult) string {
-	return update.WindowsDistributionHoldMessage + " " +
-		"No binary or remote script was downloaded or executed. Install/update from source with Go 1.25.10+:\n  " +
 		gentleAISourceCommandForResult(r)
 }
 
@@ -499,8 +389,7 @@ func gentleAISourceCommandForResult(r update.UpdateResult) string {
 // It honors GENTLE_AI_CHANNEL: when the channel is beta, engram is installed
 // from source via `go install @main`. For stable (the default when the env var
 // is unset or unknown), the pre-built release binary is downloaded via
-// engramDownloadFn. On Windows, PATH changes are persisted to the user registry
-// via PowerShell.
+// engramDownloadFn.
 func engramBinaryUpgrade(profile system.PlatformProfile) error {
 	// Resolve the install channel from the environment. Unknown values fall back
 	// to stable (ResolveInstallChannel returns an error for truly unrecognized
@@ -531,7 +420,7 @@ func engramBinaryUpgrade(profile system.PlatformProfile) error {
 		}
 	}
 
-	// Add install dir to PATH. On Windows this also persists via PowerShell (user registry).
+	// Add install dir to PATH.
 	binDir := filepath.Dir(binaryPath)
 	if err := system.AddToUserPath(binDir); err != nil {
 		// Non-fatal: the binary was downloaded or installed successfully. Warn and continue.
@@ -570,17 +459,7 @@ func installScriptURL(owner, repo, version string) (string, error) {
 // The script is downloaded to a temp file, then executed with bash and stdin set to nil
 // so it runs non-interactively (no prompts). This assumes the install.sh handles the
 // non-interactive case gracefully (e.g., auto-reinstalls when already installed).
-func scriptUpgrade(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile) error {
-	if profile.OS == "windows" {
-		hint := r.UpdateHint
-		if hint == "" {
-			hint = fmt.Sprintf("Download manually from https://github.com/%s/%s/releases", r.Tool.Owner, r.Tool.Repo)
-		}
-		return &ManualFallbackError{
-			Hint: fmt.Sprintf("upgrade %q on Windows requires manual update: %s", r.Tool.Name, hint),
-		}
-	}
-
+func scriptUpgrade(ctx context.Context, r update.UpdateResult) error {
 	url, err := installScriptURL(r.Tool.Owner, r.Tool.Repo, r.LatestVersion)
 	if err != nil {
 		return fmt.Errorf("download install.sh: %w", err)
@@ -636,30 +515,7 @@ var ggaMkdirTemp = func() (string, error) {
 // $SCRIPT_DIR/lib/*.sh (relative to the cloned repo). The generic scriptUpgrade
 // downloads and runs the script in isolation via `bash -c <content>`, which fails
 // because those relative paths don't exist without the full repo context.
-//
-// On Windows, bash is not available — returns ManualFallbackError.
 func ggaScriptUpgrade(ctx context.Context, r update.UpdateResult) error {
-	return ggaScriptUpgradeForOS(ctx, r, detectOS())
-}
-
-// detectOS returns the current runtime OS name. Package-level var for testability.
-var detectOS = func() string {
-	return runtime.GOOS
-}
-
-// ggaScriptUpgradeForOS is the testable version of ggaScriptUpgrade that accepts
-// an explicit OS string so tests can simulate Windows without actually running on it.
-func ggaScriptUpgradeForOS(ctx context.Context, r update.UpdateResult, osName string) error {
-	if osName == "windows" {
-		hint := r.UpdateHint
-		if hint == "" {
-			hint = fmt.Sprintf("Download manually from https://github.com/%s/%s/releases", r.Tool.Owner, r.Tool.Repo)
-		}
-		return &ManualFallbackError{
-			Hint: fmt.Sprintf("upgrade %q on Windows requires manual update: %s", r.Tool.Name, hint),
-		}
-	}
-
 	// Use an unpredictable temp directory to avoid TOCTOU races on the fixed path.
 	tmpDir, err := ggaMkdirTemp()
 	if err != nil {

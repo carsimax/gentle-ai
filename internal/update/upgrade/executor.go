@@ -73,8 +73,7 @@ type ExecuteOptions struct {
 }
 
 type executableUpdate struct {
-	result               update.UpdateResult
-	goInstallDestination string
+	result update.UpdateResult
 }
 
 // backupExcludeSubdirs lists subdirectory base names that should be skipped
@@ -337,7 +336,6 @@ func managedGlobalBackupPaths(homeDir string) []string {
 		gga.ConfigPath(homeDir),
 		gga.AgentsTemplatePath(homeDir),
 		gga.RuntimePRModePath(homeDir),
-		gga.RuntimePS1Path(homeDir),
 	}
 }
 
@@ -413,9 +411,9 @@ func walkEmbeddedFiles(embedDir string, diagnostics io.Writer, visit func(relPat
 // auditability. By default, enumeration is silent so TUI callers are safe.
 //
 // Symlink handling:
-//   - Symlinks to directories (including Windows junctions/reparse points) are
-//     skipped entirely — their targets are not traversed. This prevents backup
-//     failures when agent config directories contain junctioned skill directories
+//   - Symlinks to directories are skipped entirely — their targets are not
+//     traversed. This prevents backup failures when agent config directories
+//     contain symlinked skill directories
 //     (e.g. ~/.claude/skills → some other directory).
 //   - Symlinks to regular files ARE included — this supports dotfile managers
 //     (stow, chezmoi, bare git) where config files like CLAUDE.md may be symlinks
@@ -491,8 +489,8 @@ func writeBackupDiagnostic(w io.Writer, format string, args ...any) {
 //
 // The backup snapshot is created before any executable upgrade — this is the
 // architectural guarantee that config is safe even if an upgrade fails mid-way.
-// Windows gentle-ai provenance is preflighted first because its manual fallback
-// must remain a true zero-mutation outcome.
+// Unanchored gentle-ai source builds are preflighted first because their manual
+// fallback must remain a true zero-mutation outcome.
 func Execute(ctx context.Context, results []update.UpdateResult, profile system.PlatformProfile, homeDir string, dryRun bool, progress ...io.Writer) UpgradeReport {
 	options := ExecuteOptions{}
 	if len(progress) > 0 && progress[0] != nil {
@@ -608,7 +606,7 @@ func ExecuteWithOptions(ctx context.Context, results []update.UpdateResult, prof
 		method := effectiveMethod(r.Tool, profile)
 		msg := fmt.Sprintf("Upgrading %s via %s (%s → %s)", r.Tool.Name, method, r.InstalledVersion, r.LatestVersion)
 		sp := NewSpinner(pw, msg)
-		toolResult := executeOne(ctx, r, profile, dryRun, candidate.goInstallDestination)
+		toolResult := executeOne(ctx, r, profile, dryRun)
 
 		// Check if the upgrade succeeded but requires immediate exit.
 		// This must be handled BEFORE calling sp.Finish() so the spinner can terminate properly.
@@ -646,8 +644,8 @@ func ExecuteWithOptions(ctx context.Context, results []update.UpdateResult, prof
 	}
 }
 
-// preflightGentleAIUpgrades removes unsupported source-build and unsafe Windows
-// self-upgrades before backups. A manual fallback must not create or prune a
+// preflightGentleAIUpgrades removes unsupported source-build self-upgrades
+// before backups. A manual fallback must not create or prune a
 // backup because no upgrade will be attempted.
 func preflightGentleAIUpgrades(executable []executableUpdate, profile system.PlatformProfile) ([]executableUpdate, []ToolUpgradeResult) {
 	remaining := make([]executableUpdate, 0, len(executable))
@@ -662,27 +660,6 @@ func preflightGentleAIUpgrades(executable []executableUpdate, profile system.Pla
 			})
 			continue
 		}
-		if profile.OS != "windows" || r.Tool.Name != "gentle-ai" || effectiveMethod(r.Tool, profile) != update.InstallGoInstall {
-			remaining = append(remaining, candidate)
-			continue
-		}
-
-		destination, err := preflightWindowsGentleAIGoInstall(r, profile)
-		if err != nil {
-			if hint, ok := AsManualFallback(err); ok {
-				skipped = append(skipped, ToolUpgradeResult{
-					ToolName:   r.Tool.Name,
-					OldVersion: r.InstalledVersion,
-					NewVersion: r.LatestVersion,
-					Method:     effectiveMethod(r.Tool, profile),
-					Status:     UpgradeSkipped,
-					ManualHint: hint,
-				})
-				continue
-			}
-		}
-
-		candidate.goInstallDestination = destination
 		remaining = append(remaining, candidate)
 	}
 	return remaining, skipped
@@ -697,7 +674,7 @@ func detectCommandHint(tool update.ToolInfo) string {
 }
 
 // executeOne runs the upgrade for a single tool.
-func executeOne(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile, dryRun bool, preflightDestination ...string) ToolUpgradeResult {
+func executeOne(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile, dryRun bool) ToolUpgradeResult {
 	base := ToolUpgradeResult{
 		ToolName:   r.Tool.Name,
 		OldVersion: r.InstalledVersion,
@@ -709,7 +686,7 @@ func executeOne(ctx context.Context, r update.UpdateResult, profile system.Platf
 		base.Status = UpgradeSkipped
 		return base
 	}
-	outcome, err := runStrategyWithOutcome(ctx, r, profile, preflightDestination...)
+	outcome, err := runStrategyWithOutcome(ctx, r, profile)
 	if err != nil {
 		// Distinguish manual fallback (informational skip) from real failures.
 		if hint, ok := AsManualFallback(err); ok {
@@ -736,7 +713,7 @@ func executeOne(ctx context.Context, r update.UpdateResult, profile system.Platf
 //  1. Homebrew is used only when Homebrew confirms it owns this specific tool.
 //  2. gentle-ai's own upgrade never falls through to the generic rules below; it
 //     is resolved entirely by gentleAISelfUpgradeMethod: configured release
-//     anchors keep Linux/macOS on signed downloads; exact UNSET source builds
+//     anchors keep signed downloads; exact UNSET source builds
 //     may use Go's pinned module installation.
 //  3. For every other tool: when Go is available on PATH and the tool declares a
 //     GoImportPath, go-install is preferred over a direct binary download.
@@ -757,36 +734,15 @@ func effectiveMethod(tool update.ToolInfo, profile system.PlatformProfile) updat
 // gentleAISelfUpgradeMethod resolves how gentle-ai upgrades itself, once
 // Homebrew ownership has already been ruled out.
 //
-// Trust anchors differ by build and platform:
+// Trust anchors differ by build:
 //
-//   - Linux/macOS release builds keep InstallBinary and minisign verification.
+//   - Release builds keep InstallBinary and minisign verification.
 //     Only source builds carrying the exact UNSET sentinel may use a pinned
 //     Go install when Go and an import path are available. Empty, malformed,
 //     or placeholder keys still take the binary path and fail authentication;
 //     signature failures never trigger a Go fallback.
-//
-//   - Windows publishes no official binary and no Scoop manifest while publicly
-//     trusted Authenticode signing is pending, so there is no signed asset to
-//     download and minisign is not an option there. With Go on PATH, a pinned
-//     `go install <importPath>@vX.Y.Z` is the automatic upgrade. That is not an
-//     unverified install: goInstallUpgrade deliberately does not touch cmd.Env,
-//     so the Go checksum database (sum.golang.org) still verifies the module
-//     against its transparency log. The trust anchor moves from our minisign key
-//     to Go's checksum log — a different anchor, not a missing one. (The `@main`
-//     beta path in goInstallMainUpgrade DOES bypass sumdb via goProxyBypassEnv;
-//     that is a separate, opt-in channel and is not this path.)
-//     `go install` can write somewhere the shell does not resolve, which is why
-//     goInstallUpgrade verifies the destination afterwards and warns on mismatch.
-//
-//   - Windows without Go on PATH, or without a declared GoImportPath, returns
-//     InstallBinary, which binaryUpgrade turns into an explicit refusal naming
-//     the runnable source-install command. Nothing is downloaded or executed.
-//
-// Returning InstallBinary in every non-go-install case is also what disables a
-// legacy InstallScript declaration on Windows, where scriptUpgrade has no bash
-// and would point the user at a releases page that publishes no Windows assets.
 func gentleAISelfUpgradeMethod(tool update.ToolInfo, profile system.PlatformProfile) update.InstallMethod {
-	if (profile.OS == "windows" || isUnanchoredSourceBuild(profile)) && profile.GoAvailable && tool.GoImportPath != "" {
+	if isUnanchoredSourceBuild(profile) && profile.GoAvailable && tool.GoImportPath != "" {
 		return update.InstallGoInstall
 	}
 	return update.InstallBinary

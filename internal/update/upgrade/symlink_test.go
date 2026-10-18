@@ -3,26 +3,19 @@ package upgrade
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
 // TestEnumerateFilesInDir_SkipsSymlinks verifies that enumerateFilesInDir does not
-// traverse into symlinks pointing to directories (simulates Windows junctions /
-// reparse points). Directory symlinks are skipped entirely.
+// traverse into symlinks pointing to directories. Directory symlinks are
+// skipped entirely.
 //
 // Note: filepath.WalkDir does NOT follow symlinks — it reports them as entries
 // with d.Type()&ModeSymlink set. Without the symlink check, a symlink-to-dir
 // would pass the !d.IsDir() check and be added to the file list, causing
 // "is a directory" errors when snapshotPath attempts to copy it as a file.
-//
-// On Windows, os.Symlink requires elevated privileges or developer mode enabled.
-// We skip on Windows since the fix uses a platform-safe check.
-func TestEnumerateFilesInDir_SkipsSymlinks(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("os.Symlink requires elevated privileges on Windows — skipping symlink traversal test")
-	}
 
+func TestEnumerateFilesInDir_SkipsSymlinks(t *testing.T) {
 	home := t.TempDir()
 
 	// Create a real file inside home that should be discovered.
@@ -42,7 +35,6 @@ func TestEnumerateFilesInDir_SkipsSymlinks(t *testing.T) {
 	}
 
 	// Create a symlink inside home that points to the target directory.
-	// This simulates a Windows junction / reparse point.
 	symlinkPath := filepath.Join(home, "skills-link")
 	if err := os.Symlink(targetDir, symlinkPath); err != nil {
 		t.Fatalf("os.Symlink: %v", err)
@@ -83,10 +75,6 @@ func TestEnumerateFilesInDir_SkipsSymlinks(t *testing.T) {
 // (stow, chezmoi, bare git) where config files like CLAUDE.md are symlinks to
 // files in a dotfiles repository.
 func TestEnumerateFilesInDir_SymlinkToFileIsIncluded(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("os.Symlink requires elevated privileges on Windows")
-	}
-
 	home := t.TempDir()
 
 	// Create a real file outside the config dir (simulates dotfiles repo).
@@ -139,10 +127,6 @@ func TestEnumerateFilesInDir_SymlinkToFileIsIncluded(t *testing.T) {
 // TestEnumerateFilesInDir_BrokenSymlinkIsSkipped verifies that broken symlinks
 // (pointing to a nonexistent target) are silently skipped without error.
 func TestEnumerateFilesInDir_BrokenSymlinkIsSkipped(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("os.Symlink requires elevated privileges on Windows")
-	}
-
 	home := t.TempDir()
 
 	// Create a broken symlink.
@@ -176,13 +160,9 @@ func TestEnumerateFilesInDir_BrokenSymlinkIsSkipped(t *testing.T) {
 }
 
 // TestEnumerateFilesInDir_SymlinkInSubdirDoesNotBreakBackup verifies that when a
-// subdirectory contains a symlink to another directory (common with skill directories
-// junctioned on Windows), enumerateFilesInDir succeeds and the real files are found.
+// subdirectory contains a symlink to another directory (common with symlinked
+// skill directories), enumerateFilesInDir succeeds and the real files are found.
 func TestEnumerateFilesInDir_SymlinkInSubdirDoesNotBreakBackup(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("os.Symlink requires elevated privileges on Windows — skipping symlink traversal test")
-	}
-
 	home := t.TempDir()
 
 	// .claude/ directory with a real config file and a junctioned skills dir.

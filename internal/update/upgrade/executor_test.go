@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -31,8 +30,8 @@ func brewProfile() system.PlatformProfile {
 	return system.PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}
 }
 
-func linuxProfile() system.PlatformProfile {
-	return system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", Supported: true}
+func darwinProfile() system.PlatformProfile {
+	return system.PlatformProfile{OS: "darwin", Supported: true}
 }
 
 func makeResult(name string, status update.UpdateStatus, oldVer, newVer string, method update.InstallMethod) update.UpdateResult {
@@ -96,7 +95,7 @@ func TestExecute_DevBuildOnlyNoBackupCreated(t *testing.T) {
 		makeResult("gentle-ai", update.DevBuild, "dev", "1.0.0", update.InstallBinary),
 	}
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	if execCalled {
 		t.Errorf("execCommand should NOT be called for DevBuild-only inputs")
@@ -122,7 +121,7 @@ func TestExecute_VersionUnknownIsSurfacedAsSkipped(t *testing.T) {
 	}
 	results[0].Tool.DetectCmd = []string{"engram", "version"}
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	if len(report.Results) != 1 {
 		t.Fatalf("len(Results) = %d, want 1", len(report.Results))
@@ -183,7 +182,7 @@ func TestExecute_BackupBeforeExecution(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	// BackupID must be non-empty.
 	if report.BackupID == "" {
@@ -221,7 +220,7 @@ func TestExecuteProgressDoesNotIncludeBackupExclusionDiagnostics(t *testing.T) {
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
 	var progress bytes.Buffer
-	report := Execute(context.Background(), results, linuxProfile(), home, false, &progress)
+	report := Execute(context.Background(), results, darwinProfile(), home, false, &progress)
 	if report.BackupID == "" {
 		t.Fatal("BackupID should be populated before upgrade execution")
 	}
@@ -254,7 +253,7 @@ func TestExecute_DryRunNeverExecs(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), true)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), true)
 
 	if called {
 		t.Errorf("execCommand was called during dry-run — must NOT execute")
@@ -296,7 +295,7 @@ func TestExecute_PerToolSuccessAndFailure(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	if len(report.Results) != 1 {
 		t.Fatalf("len(Results) = %d, want 1", len(report.Results))
@@ -327,7 +326,7 @@ func TestExecute_DevBuildIsSkipped(t *testing.T) {
 	}
 	results[1].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	// gentle-ai (DevBuild) MUST appear as UpgradeSkipped with a ManualHint.
 	var devResult *ToolUpgradeResult
@@ -380,7 +379,7 @@ func TestExecute_FailureDoesNotImplyConfigLoss(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	// Even with failure, BackupID must be set (backup happened before exec).
 	if report.BackupID == "" {
@@ -423,7 +422,7 @@ func TestExecute_DevBuildSurfacedAsSkipped(t *testing.T) {
 	}
 	results[1].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	// gentle-ai (DevBuild) MUST appear in results as UpgradeSkipped.
 	var devResult *ToolUpgradeResult
@@ -499,7 +498,7 @@ func TestExecute_ConfigNotMutatedDuringUpgrade(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	profile := linuxProfile()
+	profile := darwinProfile()
 
 	// Execute upgrade.
 	report := Execute(context.Background(), results, profile, homeDir, false)
@@ -675,7 +674,7 @@ func TestExecute_ForcedSnapshotFailureSurfacesWarningEndToEnd(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	// BackupID must be empty — the snapshot failed.
 	if report.BackupID != "" {
@@ -744,7 +743,7 @@ func TestExecute_UpgradeBackupManifestHasUpgradeMetadata(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), homeDir, false)
+	report := Execute(context.Background(), results, darwinProfile(), homeDir, false)
 
 	if report.BackupID == "" {
 		t.Fatalf("BackupID is empty — backup must be created")
@@ -793,7 +792,7 @@ func TestExecute_SuccessfulSnapshotHasNoWarning(t *testing.T) {
 	}
 	results[0].Tool.GoImportPath = "github.com/Gentleman-Programming/engram/cmd/engram"
 
-	report := Execute(context.Background(), results, linuxProfile(), t.TempDir(), false)
+	report := Execute(context.Background(), results, darwinProfile(), t.TempDir(), false)
 
 	if report.BackupWarning != "" {
 		t.Errorf("BackupWarning = %q, want empty when snapshot succeeds", report.BackupWarning)
@@ -845,10 +844,6 @@ func TestConfigPathsForBackup_CoversRegistryAgentsNotInOldList(t *testing.T) {
 // non-agent extras that must be preserved outside the canonical managed set.
 func TestConfigPathsForBackup_GGAExtrasAreIncluded(t *testing.T) {
 	homeDir := t.TempDir()
-
-	if runtime.GOOS == "windows" {
-		t.Setenv("APPDATA", filepath.Join(homeDir, "AppData", "Roaming"))
-	}
 
 	// Create GGA config file at the platform-appropriate path
 	ggaConfigFile := gga.ConfigPath(homeDir)
@@ -1269,7 +1264,7 @@ func TestEnumerateFilesInDir_EmptyExcludesWalksEverything(t *testing.T) {
 
 // TestEnumerateFilesInDir_CaseInsensitiveExclude verifies that directory names
 // with mixed casing (e.g. "Projects", "CACHE") are excluded on case-insensitive
-// filesystems like Windows NTFS. The exclude map keys are lowercase; the
+// filesystems like default macOS APFS. The exclude map keys are lowercase; the
 // strings.ToLower normalization in enumerateFilesInDir handles the mismatch.
 func TestEnumerateFilesInDir_CaseInsensitiveExclude(t *testing.T) {
 	root := t.TempDir()
@@ -1461,25 +1456,6 @@ func TestConfigPathsForBackup_ConfiguredEmptySelectionExcludesDetectedAgents(t *
 }
 
 func mockCmd(name string, args ...string) *exec.Cmd {
-	if runtime.GOOS == "windows" {
-		if name == "echo" {
-			// `cmd /c echo` with nothing after it prints "ECHO is on", cmd's
-			// status line, not an empty line. A stub standing in for an unset
-			// `go env` value would then hand the caller that sentence as if it
-			// were the value, and callers that branch on "" take the wrong
-			// path. `echo.` is the form that emits a genuinely empty line.
-			if joined := strings.Join(args, " "); strings.TrimSpace(joined) != "" {
-				return exec.Command("cmd", "/c", "echo "+joined)
-			}
-			return exec.Command("cmd", "/c", "echo.")
-		}
-		if name == "true" {
-			return exec.Command("cmd", "/c", "exit 0")
-		}
-		if name == "false" {
-			return exec.Command("cmd", "/c", "exit 1")
-		}
-	}
 	return exec.Command(name, args...)
 }
 
@@ -1839,10 +1815,6 @@ func TestManagedAgentBackupPathsOmitPromptsBehindSymlinkedRuntimeDirs(t *testing
 // created. Files outside the known paths are not part of the snapshot and stay.
 func TestClaudePilotSnapshotRestoreRemovesModulePilot(t *testing.T) {
 	home := t.TempDir()
-	if runtime.GOOS == "windows" {
-		// GGA honors APPDATA independently of the explicit installation home.
-		t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
-	}
 	if err := state.Write(home, state.InstallState{InstalledAgents: []string{string(model.AgentClaudeCode)}}); err != nil {
 		t.Fatalf("state.Write: %v", err)
 	}

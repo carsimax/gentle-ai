@@ -8,8 +8,6 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
-const WindowsDistributionHoldMessage = "Windows binary distribution and Scoop are temporarily unavailable until publicly trusted Authenticode signing is enforced."
-
 // GentleAISourceInstallCommand returns the safe source-install fallback for an
 // exact release or the latest release when version is empty. Beta builds
 // require validated commit metadata; use ValidatedBetaSourceInstallCommand.
@@ -75,16 +73,7 @@ func gentleAIHint(profile system.PlatformProfile) string {
 		return "brew upgrade gentle-ai"
 	}
 
-	switch profile.OS {
-	case "linux":
-		return "curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/main/scripts/install.sh | bash"
-	case "darwin":
-		return "gentle-ai upgrade (downloads pre-built binary)"
-	case "windows":
-		return WindowsDistributionHoldMessage + " Install/update from source with Go 1.25.10+: " + GentleAISourceInstallCommand("")
-	default:
-		return ""
-	}
+	return "gentle-ai upgrade (downloads pre-built binary)"
 }
 
 func engramHint(profile system.PlatformProfile) string {

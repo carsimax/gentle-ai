@@ -3,12 +3,10 @@ package update
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -154,156 +152,6 @@ func TestSigningMaterialCleanupFallsBackAndProvesAbsence(t *testing.T) {
 		if strings.Contains(workflow, `shred --remove "$MINISIGN_SECRET_KEY_FILE" 2>/dev/null || true`) {
 			t.Errorf("%s cleanup masks shred failure", filepath.Join(workflowPath...))
 		}
-	}
-}
-
-func TestReleaseAssetVerifierPreservesReadOnlyRotationVerification(t *testing.T) {
-	if runtime.GOOS != "linux" {
-		t.Skip("release verification runtime is Ubuntu-specific")
-	}
-	for _, command := range []string{"bash", "jq", "sha256sum"} {
-		if _, err := exec.LookPath(command); err != nil {
-			t.Skipf("%s is unavailable: %v", command, err)
-		}
-	}
-
-	makeKey := func(fill byte) string {
-		payload := bytes.Repeat([]byte{fill}, 42)
-		payload[0], payload[1] = 'E', 'd'
-		return base64.StdEncoding.EncodeToString(payload)
-	}
-	firstKey, signingKey := makeKey(1), makeKey(2)
-	fakeBin := t.TempDir()
-	ghLog := filepath.Join(t.TempDir(), "gh-calls.log")
-	writeExecutable := func(name, content string) {
-		t.Helper()
-		if err := os.WriteFile(filepath.Join(fakeBin, name), []byte(content), 0o700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	writeExecutable("gh", `#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' "$*" >>"$GH_CALL_LOG"
-tag=${RELEASE_VERIFICATION_TAG:-$GITHUB_REF_NAME}
-if [[ "$1" == api && "$2" == "repos/$GITHUB_REPOSITORY/releases/tags/$tag" ]]; then
-  cat <<JSON
-{"tag_name":"$tag","draft":false,"prerelease":false,"assets":[{"name":"gentle-ai_1.2.3_darwin_amd64.tar.gz"},{"name":"gentle-ai_1.2.3_darwin_arm64.tar.gz"},{"name":"gentle-ai_1.2.3_linux_amd64.tar.gz"},{"name":"gentle-ai_1.2.3_linux_arm64.tar.gz"},{"name":"gentle-ai-review-provider-contract-1.4.0.tar.gz"},{"name":"gentle-ai-release-provenance-v1.tar.gz"},{"name":"checksums.txt"},{"name":"checksums.txt.minisig"}]}
-JSON
-  exit 0
-fi
-if [[ "$1" == release && "$2" == download && "$3" == "$tag" ]]; then
-  shift 3
-  directory=
-  while (( $# > 0 )); do
-    case "$1" in
-      --dir) directory=$2; shift 2 ;;
-      *) shift ;;
-    esac
-  done
-  [[ -n "$directory" ]]
-  mkdir -p "$directory"
-  for platform in darwin_amd64 darwin_arm64 linux_amd64 linux_arm64; do
-    printf 'archive %s\n' "$platform" >"$directory/gentle-ai_1.2.3_${platform}.tar.gz"
-  done
-  printf 'provider contract\n' >"$directory/gentle-ai-review-provider-contract-1.4.0.tar.gz"
-  printf 'release provenance\n' >"$directory/gentle-ai-release-provenance-v1.tar.gz"
-  (cd "$directory" && sha256sum gentle-ai_1.2.3_*.tar.gz gentle-ai-review-provider-contract-1.4.0.tar.gz gentle-ai-release-provenance-v1.tar.gz >checksums.txt)
-  printf 'test signature\n' >"$directory/checksums.txt.minisig"
-  exit 0
-fi
-exit 64
-`)
-	writeExecutable("minisign", `#!/usr/bin/env bash
-set -euo pipefail
-public_key=
-while (( $# > 0 )); do
-  case "$1" in
-    -P) public_key=$2; shift 2 ;;
-    *) shift ;;
-  esac
-done
-[[ "$public_key" == "$EXPECTED_SIGNING_KEY" ]] || exit 1
-printf 'repo=%s;tag=%s\n' "$GITHUB_REPOSITORY" "${RELEASE_VERIFICATION_TAG:-$GITHUB_REF_NAME}"
-`)
-
-	root := filepath.Clean(filepath.Join("..", ".."))
-	for _, tc := range []struct {
-		name            string
-		githubRef       string
-		verificationTag string
-		setExplicitTag  bool
-		wantSuccess     bool
-		wantOutput      string
-	}{
-		{
-			name:            "promotion tag overrides workflow dispatch main ref",
-			githubRef:       "main",
-			verificationTag: "v1.2.3",
-			setExplicitTag:  true,
-			wantSuccess:     true,
-		},
-		{
-			name:        "native tag ref remains supported",
-			githubRef:   "v1.2.3",
-			wantSuccess: true,
-		},
-		{
-			name:            "empty explicit promotion tag fails closed",
-			githubRef:       "v1.2.3",
-			verificationTag: "",
-			setExplicitTag:  true,
-			wantOutput:      "RELEASE_VERIFICATION_TAG is empty",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if err := os.WriteFile(ghLog, nil, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			command := exec.Command("bash", "scripts/verify-release-assets.sh")
-			command.Dir = root
-			environment := make([]string, 0, len(os.Environ())+8)
-			for _, value := range os.Environ() {
-				name, _, _ := strings.Cut(value, "=")
-				switch name {
-				case "PATH", "GH_CALL_LOG", "GH_TOKEN", "GITHUB_REPOSITORY", "GITHUB_REF_NAME", "MINISIGN_PUBLIC_KEYS", "EXPECTED_SIGNING_KEY", "RELEASE_VERIFICATION_TAG":
-					continue
-				}
-				environment = append(environment, value)
-			}
-			command.Env = append(environment,
-				"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
-				"GH_CALL_LOG="+ghLog,
-				"GH_TOKEN=read-only-test-token",
-				"GITHUB_REPOSITORY=Gentleman-Programming/gentle-ai",
-				"GITHUB_REF_NAME="+tc.githubRef,
-				"MINISIGN_PUBLIC_KEYS="+firstKey+","+signingKey,
-				"EXPECTED_SIGNING_KEY="+signingKey,
-			)
-			if tc.setExplicitTag {
-				command.Env = append(command.Env, "RELEASE_VERIFICATION_TAG="+tc.verificationTag)
-			}
-			output, err := command.CombinedOutput()
-			if tc.wantSuccess && err != nil {
-				t.Fatalf("read-only release verification failed: %v\n%s", err, output)
-			}
-			if !tc.wantSuccess && err == nil {
-				t.Fatalf("release verification accepted an unsafe tag binding:\n%s", output)
-			}
-			if tc.wantOutput != "" && !strings.Contains(string(output), tc.wantOutput) {
-				t.Fatalf("release verification output = %q, want %q", output, tc.wantOutput)
-			}
-			if !tc.wantSuccess {
-				return
-			}
-			calls, err := os.ReadFile(ghLog)
-			if err != nil {
-				t.Fatal(err)
-			}
-			lines := strings.Split(strings.TrimSpace(string(calls)), "\n")
-			if len(lines) != 2 || !strings.HasPrefix(lines[0], "api repos/") || !strings.HasPrefix(lines[1], "release download v1.2.3 ") {
-				t.Fatalf("release verifier used commands outside the approved read-only surface: %q", lines)
-			}
-		})
 	}
 }
 
@@ -462,7 +310,7 @@ func TestReleaseSecurityScriptsAreSyntacticallyValidAndFailClosed(t *testing.T) 
 				`canonicalize-release-public-keys.sh`,
 				`MINISIGN_PUBLIC_KEYS`,
 				`sha256sum --check --strict`,
-				`gentle-ai_${version}_linux_amd64.tar.gz`,
+				`gentle-ai_${version}_darwin_arm64.tar.gz`,
 				`gentle-ai-release-provenance-v1.tar.gz`,
 				`checksums.txt.minisig`,
 			},

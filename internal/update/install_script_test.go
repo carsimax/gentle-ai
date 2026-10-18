@@ -94,9 +94,7 @@ printf '%s\n%s\n%s\n' "$GONOSUMDB" "$GOPRIVATE" "$GONOPROXY"
 // scripts against the regression that shipped in v3.0.1: a module-major
 // migration that rewrites the literal module string misses them. Since
 // #4689 the Unix installer derives the module path (and its major) from
-// go.mod at the resolved source ref, so its guard asserts that derivation;
-// the PowerShell installer still pins the current major (until #4690) and
-// is guarded against a migration that forgets it.
+// go.mod at the resolved source ref, so its guard asserts that derivation.
 func TestInstallScriptsGoInstallPackageMatchesModuleMajor(t *testing.T) {
 	goMod, err := os.ReadFile(filepath.Join("..", "..", "go.mod"))
 	if err != nil {
