@@ -25,8 +25,14 @@ Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runn
 | T3 | S6 | inline | done: RED (undefined ensureForkPlatform) then GREEN; darwin/amd64 rejected under Rosetta | 94ee1a4b |
 | T4 | S2, S7, S8 | inline | done: scripts/test-port-upstream.sh 11/11 PASS (found and fixed empty-commit bug) | 602b5072 |
 | T5 | S9 | inline | blocked on decision | |
-| T6 | S4 | inline | done: assets tests green | (this commit) |
-| T7 | S10 | pending map (explorer) | pending | |
+| T6 | S4 | inline | done: assets tests green | 10e8131c |
+| T7a | S10 | delegated (parallel) | done: engram | 3acb687a |
+| T7b | S10 | delegated (parallel) | done: reviewtransaction + reviewerprovider + cli/review_* | d9bf394b |
+| T7c | S10 | delegated (parallel) | done: update + update/upgrade | fadf8fe4 |
+| T7d | S10 | delegated (parallel) | done: opencode + uninstall (exported signatures kept) | b236be15 |
+| T7e | S10 | delegated (parallel) | done: leaf packages + agents | 145c6812 |
+| T7f | S10 | delegated (after wave A) | in progress: system, installcmd, planner, gga, cli hub, exported-signature cleanup | |
+| T7g | S10 | inline | pending: build-tag simplification, ratchet baseline, full suite | |
 
 Route evidence: no Writer trigger (units depend on each other's deletions; no parallel units), so the parent works inline.
 
@@ -41,3 +47,7 @@ Route evidence: no Writer trigger (units depend on each other's deletions; no pa
 - L7: Baseline failures also present on `cmx`: `internal/update` (TestReleaseSecurityScriptsAreSyntacticallyValidAndFailClosed, TestCanonicalReleasePublicKeysControlRealLinkerBuild) and `internal/components/reviewassets` (TestOwnershipReuseRejectsLedgerWithoutMutation).
 - L8: Native review assessed high (item 5); user chose "Omitir esta vez"; decline recorded as declined_this_candidate.
 - L9 (2026-10-18): "contemplaste los e2e tambien?" then "Si este cambio tiene que ser absoluto, SOLO Mac Apple Silicon". Removal becomes absolute: Docker/Linux e2e, Linux-only mjs tests, gga.ps1, OS branches in shared code, and doc/skill mentions. Accepts higher cherry-pick conflict cost.
+- L10: Explorer map: ~2.5k removable production lines across ~15 packages plus ~100 coupled tests; `bench/` is a separate Go module and its `lock_other.go` was missed by L3 (fixed in 8ab02a57). Route evidence for T7a-e: Writer trigger (a), five independent units with disjoint edit surfaces, each several files; wave A keeps exported APIs used outside the unit so the tree keeps compiling; T7f owns the cli hub and shared PlatformProfile.
+- L11: Decisions for visible darwin output: strings naming Windows/Linux support now say macOS on Apple Silicon only; detection keeps macOS-relevant tools (brew, nix) and drops Linux/Windows package managers; keep `/usr/local/bin` brew fallback; keep OpenCode XDG_CONFIG_HOME handling; keep Pi `windowsDrivePath` input validation (repository/user input, not host OS); release provenance lists only darwin/arm64. Assumption: "absolute" overrides the Claude-Code-only memory for OS branches in other agents' adapters.
+- L12: Another session (gentle-ai-10) removed the bench module and gentle-ai-bench skill on this branch (24ee38cd); user decided it commits its own work. Its TestEmbeddedAssetCount regression (16 vs 15 skill dirs) is that session's to fix.
+- L13: Wave A committed: engram 3acb687a, review d9bf394b, update fadf8fe4, opencode b236be15, leaves 145c6812; integration build/vet green; package tests green except baseline update failures.
