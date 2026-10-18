@@ -17,9 +17,8 @@ func TestRenderDryRunIncludesPlatformDecision(t *testing.T) {
 		},
 		Review: planner.ReviewPayload{
 			PlatformDecision: planner.PlatformDecision{
-				OS:             "linux",
-				LinuxDistro:    "ubuntu",
-				PackageManager: "apt",
+				OS:             "darwin",
+				PackageManager: "brew",
 				Supported:      true,
 			},
 		},
@@ -27,7 +26,7 @@ func TestRenderDryRunIncludesPlatformDecision(t *testing.T) {
 
 	output := RenderDryRun(result)
 
-	want := "Platform decision: os=linux distro=ubuntu package-manager=apt status=supported"
+	want := "Platform decision: os=darwin package-manager=brew status=supported"
 	if !strings.Contains(output, want) {
 		t.Fatalf("RenderDryRun() missing platform decision\noutput=%s", output)
 	}

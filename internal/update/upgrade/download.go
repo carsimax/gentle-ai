@@ -86,17 +86,7 @@ var (
 // fetch the bounded manifest and detached signature, authenticate both the
 // manifest and its exact repository/tag binding, parse one unique archive
 // digest, then download/check/extract and finally replace the binary.
-//
-// This function is not called on Windows — callers (strategy.go) gate it via
-// platform check and return a manual fallback error instead.
 func Download(ctx context.Context, r update.UpdateResult, profile system.PlatformProfile) error {
-	if profile.OS == "windows" {
-		hint := r.UpdateHint
-		if hint == "" {
-			hint = fmt.Sprintf("Download from https://github.com/%s/%s/releases", r.Tool.Owner, r.Tool.Repo)
-		}
-		return fmt.Errorf("upgrade %q on Windows requires manual update — %s", r.Tool.Name, hint)
-	}
 	if err := validateReleaseIdentity(r.Tool.Owner, r.Tool.Repo, r.LatestVersion); err != nil {
 		return fmt.Errorf("authenticate release: %w", err)
 	}
@@ -401,11 +391,8 @@ func writeExecutable(r io.Reader, outPath string) error {
 // back.
 //
 // The read-back is the point. A rename that returns nil has not necessarily
-// taken effect. On Windows a hold by antivirus, the indexer, or the running
-// image turns the swap into a silent no-op, and reporting the attempt as the
-// outcome is how an upgrade was announced as applied over an unchanged binary
-// (#2319). This is safe on Unix (same-filesystem rename); the caller must guard
-// against Windows before calling.
+// taken effect, and reporting the attempt as the outcome is how an upgrade was
+// announced as applied over an unchanged binary (#2319).
 func atomicReplace(src, dst string) error {
 	stagedDigest, stagedBytes, err := filemerge.FileDigest(src)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -282,30 +281,21 @@ func RunVersion(target string) (string, error) {
 // ActivationOptions supplies platform and process seams for activation. Zero
 // values use the current process and the real system PATH implementation.
 type ActivationOptions struct {
-	OS   string
 	Path string
 	// Shell is the user's login shell; it selects the login profile that
 	// persists the managed bin directory on POSIX. Defaults to $SHELL.
 	Shell string
 	// ZDotDir is zsh's profile directory override. Defaults to $ZDOTDIR.
-	ZDotDir                  string
-	RunVersion               VersionRunner
-	AddToUserPath            func(string) error
-	RemoveFromUserPath       func(string) error
-	AddToUserPathWithResult  func(string) (system.UserPathAddition, error)
-	RollbackUserPathAddition func(string, system.UserPathAddition) error
-	ResolveTarget            func(homeDir, goos, pathValue string) (string, error)
-	WriteFile                func(path string, content []byte, mode os.FileMode) error
-	RemoveFile               func(path string) error
-	// NewShellPath returns the PATH a new Windows terminal inherits. POSIX
-	// readiness is modeled from login startup files instead.
-	NewShellPath func() (string, error)
+	ZDotDir            string
+	RunVersion         VersionRunner
+	AddToUserPath      func(string) error
+	RemoveFromUserPath func(string) error
+	ResolveTarget      func(homeDir, pathValue string) (string, error)
+	WriteFile          func(path string, content []byte, mode os.FileMode) error
+	RemoveFile         func(path string) error
 }
 
 func (o ActivationOptions) normalized() ActivationOptions {
-	if o.OS == "" {
-		o.OS = runtime.GOOS
-	}
 	if o.Path == "" {
 		o.Path = os.Getenv("PATH")
 	}
@@ -324,12 +314,6 @@ func (o ActivationOptions) normalized() ActivationOptions {
 	if o.RemoveFromUserPath == nil {
 		o.RemoveFromUserPath = system.RemoveFromUserPath
 	}
-	if o.AddToUserPathWithResult == nil {
-		o.AddToUserPathWithResult = system.AddToUserPathWithResult
-	}
-	if o.RollbackUserPathAddition == nil {
-		o.RollbackUserPathAddition = system.RollbackUserPathAddition
-	}
 	if o.ResolveTarget == nil {
 		o.ResolveTarget = ResolveTarget
 	}
@@ -343,9 +327,6 @@ func (o ActivationOptions) normalized() ActivationOptions {
 	}
 	if o.RemoveFile == nil {
 		o.RemoveFile = removeManagedLauncherFile
-	}
-	if o.NewShellPath == nil {
-		o.NewShellPath = system.NewShellPath
 	}
 	return o
 }
@@ -373,32 +354,19 @@ func BinDir(homeDir string) string { return filepath.Join(homeDir, ".gentle-ai",
 // POSIXLauncherPath returns the POSIX launcher path.
 func POSIXLauncherPath(homeDir string) string { return filepath.Join(BinDir(homeDir), "opencode") }
 
-// WindowsCMDPath returns the Windows cmd launcher path.
-func WindowsCMDPath(homeDir string) string { return filepath.Join(BinDir(homeDir), "opencode.cmd") }
-
-// WindowsPS1Path returns the Windows PowerShell launcher path.
-func WindowsPS1Path(homeDir string) string { return filepath.Join(BinDir(homeDir), "opencode.ps1") }
-
-// ManagedLauncherPaths returns the launcher files for the requested platform.
-// WSL reports linux and therefore receives the POSIX launcher.
-func ManagedLauncherPaths(homeDir, goos string) []string {
-	if goos == "windows" {
-		return []string{WindowsCMDPath(homeDir), WindowsPS1Path(homeDir)}
-	}
+// ManagedLauncherPaths returns the managed launcher files.
+func ManagedLauncherPaths(homeDir string) []string {
 	return []string{POSIXLauncherPath(homeDir)}
 }
 
 // LauncherPaths is an alias with a concise name for callers that already know
 // they are asking for Gentle-owned paths.
-func LauncherPaths(homeDir, goos string) []string { return ManagedLauncherPaths(homeDir, goos) }
+func LauncherPaths(homeDir string) []string { return ManagedLauncherPaths(homeDir) }
 
 // ResolveTarget finds a stable OpenCode executable path outside the Gentle-owned
 // bin directory. Physical targets are checked for recursion, but executable
 // symlinks are preserved so package-manager upgrades do not invalidate launchers.
-func ResolveTarget(homeDir, goos, pathValue string) (string, error) {
-	if goos == "" {
-		goos = runtime.GOOS
-	}
+func ResolveTarget(homeDir, pathValue string) (string, error) {
 	managedDir, err := filepath.Abs(BinDir(homeDir))
 	if err != nil {
 		return "", fmt.Errorf("resolve managed OpenCode bin directory: %w", err)
@@ -406,12 +374,12 @@ func ResolveTarget(homeDir, goos, pathValue string) (string, error) {
 	if physicalDir, evalErr := filepath.EvalSymlinks(managedDir); evalErr == nil {
 		managedDir = physicalDir
 	}
-	for _, entry := range splitPath(pathValue, goos) {
+	for _, entry := range splitPath(pathValue) {
 		entry = strings.Trim(strings.TrimSpace(entry), `"`)
 		if entry == "" || !filepath.IsAbs(entry) {
 			continue
 		}
-		// Normalize directory aliases (including Windows short names), but do
+		// Normalize directory aliases, but do
 		// not resolve the executable symlink that a package manager maintains.
 		entry, err = filepath.EvalSymlinks(entry)
 		if err != nil {
@@ -421,77 +389,48 @@ func ResolveTarget(homeDir, goos, pathValue string) (string, error) {
 		if err != nil {
 			continue
 		}
-		if samePath(entry, managedDir, goos) {
+		if samePath(entry, managedDir) {
 			continue
 		}
-		for _, name := range targetNames(goos) {
-			candidate := filepath.Join(entry, name)
-			info, statErr := os.Stat(candidate)
-			if statErr != nil || !info.Mode().IsRegular() || goos != "windows" && info.Mode().Perm()&0o111 == 0 {
-				continue
-			}
-			realPath, evalErr := filepath.EvalSymlinks(candidate)
-			if evalErr != nil {
-				continue
-			}
-			realPath, absErr := filepath.Abs(realPath)
-			if absErr != nil {
-				continue
-			}
-			if pathUnder(realPath, managedDir, goos) {
-				continue
-			}
-			return candidate, nil
+		candidate := filepath.Join(entry, "opencode")
+		info, statErr := os.Stat(candidate)
+		if statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			continue
 		}
+		realPath, evalErr := filepath.EvalSymlinks(candidate)
+		if evalErr != nil {
+			continue
+		}
+		realPath, absErr := filepath.Abs(realPath)
+		if absErr != nil {
+			continue
+		}
+		if pathUnder(realPath, managedDir) {
+			continue
+		}
+		return candidate, nil
 	}
 	return "", fmt.Errorf("OpenCode target not found outside managed launcher directory %q", managedDir)
 }
 
-func splitPath(value, goos string) []string {
-	separator := ":"
-	if goos == "windows" {
-		separator = ";"
-	}
+func splitPath(value string) []string {
 	if value == "" {
 		return nil
 	}
-	return strings.Split(value, separator)
+	return strings.Split(value, string(filepath.ListSeparator))
 }
 
-// targetNames lists the OpenCode command names in lookup order. Windows
-// follows PATHEXT like cmd.exe and exec.LookPath.
-func targetNames(goos string) []string {
-	if goos != "windows" {
-		return []string{"opencode"}
-	}
-	extensions := windowsExecutableExtensions()
-	names := make([]string, 0, len(extensions))
-	for _, extension := range extensions {
-		names = append(names, "opencode"+extension)
-	}
-	return names
+func samePath(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
-func samePath(a, b, goos string) bool {
-	a = filepath.Clean(a)
-	b = filepath.Clean(b)
-	if goos == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
-}
-
-func pathUnder(path, root, goos string) bool {
+func pathUnder(path, root string) bool {
 	path = filepath.Clean(path)
 	root = filepath.Clean(root)
-	if samePath(path, root, goos) {
+	if path == root {
 		return true
 	}
-	prefix := root + string(filepath.Separator)
-	if goos == "windows" {
-		return strings.HasPrefix(strings.ToLower(path), strings.ToLower(prefix))
-	}
-	return strings.HasPrefix(path, prefix)
+	return strings.HasPrefix(path, root+string(filepath.Separator))
 }
 
 type activationAction string
@@ -512,18 +451,15 @@ type launcherSnapshot struct {
 // resolves the target, checks capability, and rejects collisions before Apply
 // mutates any launcher or PATH state.
 type ActivationPlan struct {
-	homeDir      string
-	goos         string
-	options      ActivationOptions
-	action       activationAction
-	capability   CapabilityResolution
-	paths        []string
-	desired      map[string][]byte
-	before       map[string]launcherSnapshot
-	changed      []string
-	pathAddition system.UserPathAddition
-	pathAdded    bool
-	profiles     []profileChange
+	homeDir    string
+	options    ActivationOptions
+	action     activationAction
+	capability CapabilityResolution
+	paths      []string
+	desired    map[string][]byte
+	before     map[string]launcherSnapshot
+	changed    []string
+	profiles   []profileChange
 	// profileReason explains why no login profile persists the managed bin
 	// directory; empty when a profile block does.
 	profileReason    string
@@ -537,10 +473,9 @@ type ActivationPlan struct {
 // typed foreground result rather than writing an unsafe launcher.
 func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPlan, error) {
 	options = options.normalized()
-	paths := ManagedLauncherPaths(homeDir, options.OS)
+	paths := ManagedLauncherPaths(homeDir)
 	plan := &ActivationPlan{
 		homeDir: homeDir,
-		goos:    options.OS,
 		options: options,
 		action:  activationActionOn,
 		paths:   paths,
@@ -548,20 +483,11 @@ func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPl
 		before:  make(map[string]launcherSnapshot, len(paths)),
 	}
 
-	target, targetErr := options.ResolveTarget(homeDir, options.OS, options.Path)
+	target, targetErr := options.ResolveTarget(homeDir, options.Path)
 	if targetErr != nil {
 		plan.capability = CapabilityResolution{
 			Status: CapabilityUnknown,
 			Reason: targetErr.Error(),
-		}
-		plan.evaluate()
-		return plan, nil
-	}
-	if options.OS == "windows" && !windowsTargetSafe(target) {
-		plan.capability = CapabilityResolution{
-			Status:     CapabilityUnsupported,
-			TargetPath: target,
-			Reason:     fmt.Sprintf("OpenCode target %q contains characters cmd.exe would expand or split (%%, !, \", or control characters), so the managed CMD launcher cannot invoke it safely; install OpenCode under a path without them", target),
 		}
 		plan.evaluate()
 		return plan, nil
@@ -583,13 +509,10 @@ func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPl
 		if snapshot.exists && !snapshot.owned {
 			return nil, fmt.Errorf("refusing user-owned OpenCode launcher collision at %q: its bytes differ from the launcher Gentle AI generates, so it is treated as yours; move or delete it to let Gentle AI regenerate it, or turn background subagents off", path)
 		}
-		content := launcherContent(options.OS, target)
-		plan.desired[path] = []byte(content[filepath.Base(path)])
+		plan.desired[path] = []byte(posixLauncher(target))
 	}
-	if options.OS != "windows" {
-		if err := plan.prepareProfileActivation(); err != nil {
-			return nil, err
-		}
+	if err := plan.prepareProfileActivation(); err != nil {
+		return nil, err
 	}
 	plan.evaluate()
 	return plan, nil
@@ -600,10 +523,9 @@ func PrepareActivation(homeDir string, options ActivationOptions) (*ActivationPl
 // safe even when the real runtime is no longer installed.
 func PrepareDeactivation(homeDir string, options ActivationOptions) (*ActivationPlan, error) {
 	options = options.normalized()
-	paths := ManagedLauncherPaths(homeDir, options.OS)
+	paths := ManagedLauncherPaths(homeDir)
 	plan := &ActivationPlan{
 		homeDir: homeDir,
-		goos:    options.OS,
 		options: options,
 		action:  activationActionOff,
 		paths:   paths,
@@ -616,10 +538,8 @@ func PrepareDeactivation(homeDir string, options ActivationOptions) (*Activation
 		}
 		plan.before[path] = snapshot
 	}
-	if options.OS != "windows" {
-		if err := plan.prepareProfileDeactivation(); err != nil {
-			return nil, err
-		}
+	if err := plan.prepareProfileDeactivation(); err != nil {
+		return nil, err
 	}
 	plan.evaluate()
 	return plan, nil
@@ -721,7 +641,7 @@ func (p *ActivationPlan) Apply() error {
 			desired := p.desired[path]
 			// Skip only when both the bytes and the executable mode already
 			// match; a launcher that lost its exec bit must be restored.
-			if before.exists && bytes.Equal(before.data, desired) && (p.goos == "windows" || before.mode.Perm() == 0o755) {
+			if before.exists && bytes.Equal(before.data, desired) && before.mode.Perm() == 0o755 {
 				continue
 			}
 			if err := requireSnapshot(path, before); err != nil {
@@ -735,14 +655,7 @@ func (p *ActivationPlan) Apply() error {
 		if err := p.applyProfiles(); err != nil {
 			return p.failAndRollback(err)
 		}
-		if p.goos == "windows" {
-			addition, err := p.options.AddToUserPathWithResult(BinDir(p.homeDir))
-			p.pathAddition = addition
-			p.pathAdded = addition.ProcessAdded || addition.PersistentAdded
-			if err != nil {
-				return p.failAndRollback(fmt.Errorf("add managed OpenCode bin directory %q to PATH: %w", BinDir(p.homeDir), err))
-			}
-		} else if err := p.options.AddToUserPath(BinDir(p.homeDir)); err != nil {
+		if err := p.options.AddToUserPath(BinDir(p.homeDir)); err != nil {
 			return p.failAndRollback(fmt.Errorf("add managed OpenCode bin directory %q to PATH: %w", BinDir(p.homeDir), err))
 		}
 		p.applied = true
@@ -782,8 +695,7 @@ func (p *ActivationPlan) failAndRollback(cause error) error {
 	return cause
 }
 
-// Rollback restores only paths and login profiles changed by this plan and
-// removes a user PATH entry only when this plan added it.
+// Rollback restores only paths and login profiles changed by this plan.
 func (p *ActivationPlan) Rollback() error {
 	if p == nil {
 		return nil
@@ -813,13 +725,6 @@ func (p *ActivationPlan) Rollback() error {
 	if err := p.rollbackProfiles(); err != nil {
 		rollbackErr = errors.Join(rollbackErr, err)
 	}
-	if p.pathAdded {
-		if err := p.options.RollbackUserPathAddition(BinDir(p.homeDir), p.pathAddition); err != nil {
-			rollbackErr = errors.Join(rollbackErr, fmt.Errorf("rollback remove managed OpenCode bin directory %q from PATH: %w", BinDir(p.homeDir), err))
-		} else {
-			p.pathAdded = false
-		}
-	}
 	if rollbackErr == nil {
 		p.changed = nil
 	}
@@ -840,9 +745,6 @@ func (p *ActivationPlan) rollbackNeeded(path string) (bool, error) {
 	applied := launcherSnapshot{exists: true, data: p.desired[path], mode: 0o755}
 	if p.action == activationActionOff {
 		applied = launcherSnapshot{}
-	}
-	if current.exists && p.goos == "windows" {
-		applied.mode = current.mode
 	}
 	if !sameSnapshot(current, applied) {
 		return false, errors.New("path changed after this plan's mutation")
@@ -907,13 +809,6 @@ func managedLauncherTarget(path string, data []byte) (string, bool) {
 		prefix, suffix, _ := strings.Cut(posixLauncher("\x00"), "'\x00'")
 		target, ok = canonicalTarget(text, prefix, suffix, "'", `'\''`)
 		ok = ok && text == posixLauncher(target)
-	case WindowsCMDPathPlaceholder:
-		target, ok = canonicalCMDTarget(text)
-		ok = ok && text == windowsCMDLauncher(target)
-	case WindowsPS1PathPlaceholder:
-		prefix, suffix, _ := strings.Cut(windowsPS1Launcher("\x00"), "'\x00'")
-		target, ok = canonicalTarget(text, prefix, suffix, "'", "''")
-		ok = ok && text == windowsPS1Launcher(target)
 	}
 	if !ok {
 		return "", false
@@ -934,39 +829,8 @@ func canonicalTarget(text, prefix, suffix, quote, escapedQuote string) (string, 
 	return strings.ReplaceAll(raw[len(quote):len(raw)-len(quote)], escapedQuote, quote), true
 }
 
-// canonicalCMDTarget extracts the target from either generated CMD form: a
-// direct invocation or a PowerShell -File invocation for .ps1 targets.
-func canonicalCMDTarget(text string) (string, bool) {
-	for _, target := range []string{"\x00", "\x00.ps1"} {
-		prefix, suffix, _ := strings.Cut(windowsCMDLauncher(target), target)
-		if !strings.HasPrefix(text, prefix) || !strings.HasSuffix(text, suffix) || len(text) < len(prefix)+len(suffix) {
-			continue
-		}
-		candidate := strings.ReplaceAll(text[len(prefix):len(text)-len(suffix)], `""`, `"`)
-		if windowsCMDLauncher(candidate) == text {
-			return candidate, true
-		}
-	}
-	return "", false
-}
-
-func launcherContent(goos, target string) map[string]string {
-	if goos == "windows" {
-		return map[string]string{
-			WindowsCMDPathPlaceholder: windowsCMDLauncher(target),
-			WindowsPS1PathPlaceholder: windowsPS1Launcher(target),
-		}
-	}
-	return map[string]string{POSIXLauncherPathPlaceholder: posixLauncher(target)}
-}
-
-// Placeholders let launcherContent stay platform-testable without constructing
-// a second home-dependent map. PrepareActivation indexes the relevant value.
-const (
-	POSIXLauncherPathPlaceholder = "opencode"
-	WindowsCMDPathPlaceholder    = "opencode.cmd"
-	WindowsPS1PathPlaceholder    = "opencode.ps1"
-)
+// POSIXLauncherPathPlaceholder is the managed launcher's file name.
+const POSIXLauncherPathPlaceholder = "opencode"
 
 func posixLauncher(target string) string {
 	return "#!/bin/sh\n" +
@@ -978,34 +842,7 @@ func posixLauncher(target string) string {
 		"exec " + shellQuote(target) + " \"$@\"\n"
 }
 
-func windowsCMDLauncher(target string) string {
-	// cmd expands %VAR% in target paths; PrepareActivation refuses targets
-	// that windowsTargetSafe rejects before this launcher is generated.
-	quotedTarget := strings.ReplaceAll(target, `"`, `""`)
-	invoke := `"` + quotedTarget + `" %*`
-	if strings.EqualFold(filepath.Ext(target), ".ps1") {
-		// Bypass applies only to this already-resolved target, never arbitrary input.
-		invoke = `powershell -NoProfile -ExecutionPolicy Bypass -File "` + quotedTarget + `" %*`
-	}
-	return "@echo off\r\n" +
-		"rem " + OwnershipMarker + "\r\n" +
-		"setlocal\r\n" +
-		"if not defined " + BackgroundSubagentsEnv + " set \"" + BackgroundSubagentsEnv + "=true\"\r\n" +
-		invoke + "\r\n" +
-		"exit /b %ERRORLEVEL%\r\n"
-}
-
-func windowsPS1Launcher(target string) string {
-	return "# " + OwnershipMarker + "\r\n" +
-		"$ErrorActionPreference = 'Stop'\r\n" +
-		"if (-not (Test-Path Env:" + BackgroundSubagentsEnv + ")) { $env:" + BackgroundSubagentsEnv + " = 'true' }\r\n" +
-		"& " + powershellQuote(target) + " @args\r\n" +
-		"exit $LASTEXITCODE\r\n"
-}
-
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
-
-func powershellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
 
 func restartGuidance(paths []string) string {
 	if len(paths) == 0 {

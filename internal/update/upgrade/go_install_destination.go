@@ -51,31 +51,19 @@ func goInstallDestinationDir() (string, error) {
 	return filepath.Join(entries[0], "bin"), nil
 }
 
-// goInstallBinaryName returns the on-disk file name `go install` produces.
-func goInstallBinaryName(toolName, osName string) string {
-	if osName == "windows" {
-		return toolName + ".exe"
-	}
-	return toolName
-}
-
-// sameBinaryPathForOS reports whether two paths designate the same executable.
+// sameBinaryPath reports whether two paths designate the same executable.
 // Symlinks are resolved when they can be, so a ~/.local/bin shim pointing into
-// the go-install directory counts as a match. Windows comparison is
-// case-insensitive and tolerates the ".exe" suffix on either side.
-//
-// osName is an explicit parameter rather than runtime.GOOS so Windows
-// comparison semantics stay testable from any host.
-func sameBinaryPathForOS(a, b, osName string) bool {
-	a = normalizeBinaryPathForOS(a, osName)
-	b = normalizeBinaryPathForOS(b, osName)
+// the go-install directory counts as a match.
+func sameBinaryPath(a, b string) bool {
+	a = normalizeBinaryPath(a)
+	b = normalizeBinaryPath(b)
 	if a == "" || b == "" {
 		return false
 	}
 	return a == b
 }
 
-func normalizeBinaryPathForOS(path, osName string) string {
+func normalizeBinaryPath(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return ""
@@ -84,12 +72,7 @@ func normalizeBinaryPathForOS(path, osName string) string {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
 		path = resolved
 	}
-	path = filepath.Clean(path)
-	if osName == "windows" {
-		path = strings.ToLower(path)
-		path = strings.TrimSuffix(path, ".exe")
-	}
-	return path
+	return filepath.Clean(path)
 }
 
 func absoluteBinaryPath(path string) string {
@@ -107,12 +90,12 @@ func absoluteBinaryPath(path string) string {
 // install runs: GOBIN and GOPATH are static Go configuration that `go install`
 // does not change, while the PATH lookup below is deliberately performed after
 // the install so a first-time install is resolved correctly.
-func goInstallDestinationNotice(toolName, osName, destDir string, destErr error) string {
+func goInstallDestinationNotice(toolName, destDir string, destErr error) string {
 	if destErr != nil {
 		return unverifiedDestinationNotice(toolName, "", destErr.Error())
 	}
 
-	installed := absoluteBinaryPath(filepath.Join(destDir, goInstallBinaryName(toolName, osName)))
+	installed := absoluteBinaryPath(filepath.Join(destDir, toolName))
 	if _, err := os.Stat(installed); err != nil {
 		// Claiming a mismatch means claiming `go install` wrote a binary here.
 		// Without an observable file that claim is unfounded, so report the
@@ -126,7 +109,7 @@ func goInstallDestinationNotice(toolName, osName, destDir string, destErr error)
 	}
 	effective = absoluteBinaryPath(effective)
 
-	if sameBinaryPathForOS(installed, effective, osName) {
+	if sameBinaryPath(installed, effective) {
 		return ""
 	}
 
@@ -149,8 +132,8 @@ func unverifiedDestinationNotice(toolName, installed, reason string) string {
 
 // warnGoInstallDestination emits the destination notice, if any, as a non-fatal
 // warning. It never returns an error: the install already succeeded.
-func warnGoInstallDestination(toolName, osName, destDir string, destErr error) {
-	if notice := goInstallDestinationNotice(toolName, osName, destDir, destErr); notice != "" {
+func warnGoInstallDestination(toolName, destDir string, destErr error) {
+	if notice := goInstallDestinationNotice(toolName, destDir, destErr); notice != "" {
 		fmt.Fprintf(os.Stderr, "WARNING: %s\n", notice)
 	}
 }

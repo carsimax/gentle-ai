@@ -321,7 +321,6 @@ func newDocumentedInvocationSandbox(t *testing.T) string {
 		}
 	}
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
 	git := func(args ...string) {
@@ -386,23 +385,6 @@ func TestDocumentedInvocationsRunAsDocumented(t *testing.T) {
 			t.Errorf("retired workflow document remains: %s", path)
 		} else if !os.IsNotExist(err) {
 			t.Errorf("cannot inspect retired document %s: %v", path, err)
-		}
-	}
-	// Secondary live guides must not promise the removed SDD workflow.
-	for name, retiredClaims := range map[string][]string{
-		"CONTRIBUTING.md":                      {"Delivery Strategy for SDD Changes", "Before `sdd-apply` starts"},
-		"docs/codebase/sync-and-cloud.md":      {"Default sync scope includes SDD", "OpenCode SDD profile flags"},
-		"docs/codebase/integrations.md":        {"| SDD assets |"},
-		"docs/codebase/maintainer-playbook.md": {"| SDD workflow |"},
-	} {
-		content, err := os.ReadFile(filepath.Join("..", "..", name))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, claim := range retiredClaims {
-			if strings.Contains(string(content), claim) {
-				t.Errorf("%s still promises retired workflow: %q", name, claim)
-			}
 		}
 	}
 	// Retired terms across all living docs are guarded by

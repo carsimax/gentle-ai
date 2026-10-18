@@ -7,16 +7,6 @@ func installHintGit(profile PlatformProfile) string {
 	switch {
 	case profile.OS == "darwin":
 		return "brew install git"
-	case profile.OS == "windows":
-		return "winget install Git.Git"
-	case profile.PackageManager == "apt":
-		return "sudo apt-get install -y git"
-	case profile.PackageManager == "pacman":
-		return "sudo pacman -S --noconfirm git"
-	case profile.PackageManager == "dnf":
-		return "sudo dnf install -y git"
-	case profile.PackageManager == "rpm-ostree":
-		return "rpm-ostree install -y --apply-live git"
 	default:
 		return "install git from https://git-scm.com/"
 	}
@@ -27,16 +17,6 @@ func installHintCurl(profile PlatformProfile) string {
 	switch {
 	case profile.OS == "darwin":
 		return "brew install curl"
-	case profile.OS == "windows":
-		return "curl is pre-installed on Windows 10+"
-	case profile.PackageManager == "apt":
-		return "sudo apt-get install -y curl"
-	case profile.PackageManager == "pacman":
-		return "sudo pacman -S --noconfirm curl"
-	case profile.PackageManager == "dnf":
-		return "sudo dnf install -y curl"
-	case profile.PackageManager == "rpm-ostree":
-		return "rpm-ostree install -y --apply-live curl"
 	default:
 		return "install curl from https://curl.se/"
 	}
@@ -47,16 +27,6 @@ func installHintNode(profile PlatformProfile) string {
 	switch {
 	case profile.OS == "darwin":
 		return "brew install node"
-	case profile.OS == "windows":
-		return "winget install OpenJS.NodeJS.LTS"
-	case profile.PackageManager == "apt":
-		return "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - && sudo apt-get install -y nodejs"
-	case profile.PackageManager == "pacman":
-		return "sudo pacman -S --noconfirm nodejs npm"
-	case profile.PackageManager == "dnf":
-		return "curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - && sudo dnf install -y nodejs"
-	case profile.PackageManager == "rpm-ostree":
-		return "rpm-ostree install -y --apply-live nodejs npm"
 	default:
 		return "install node from https://nodejs.org/"
 	}
@@ -78,16 +48,6 @@ func installHintGo(profile PlatformProfile) string {
 	switch {
 	case profile.OS == "darwin":
 		return "brew install go"
-	case profile.OS == "windows":
-		return "winget install GoLang.Go"
-	case profile.PackageManager == "apt":
-		return "sudo apt-get install -y golang"
-	case profile.PackageManager == "pacman":
-		return "sudo pacman -S --noconfirm go"
-	case profile.PackageManager == "dnf":
-		return "sudo dnf install -y golang"
-	case profile.PackageManager == "rpm-ostree":
-		return "rpm-ostree install -y --apply-live golang"
 	default:
 		return "install go from https://go.dev/dl/"
 	}
@@ -140,16 +100,6 @@ func installCommandsGit(profile PlatformProfile) [][]string {
 	switch {
 	case profile.OS == "darwin":
 		return [][]string{{"brew", "install", "git"}}
-	case profile.OS == "windows":
-		return [][]string{{"winget", "install", "--id", "Git.Git", "-e", "--accept-source-agreements", "--accept-package-agreements"}}
-	case profile.PackageManager == "apt":
-		return [][]string{{"sudo", "apt-get", "install", "-y", "git"}}
-	case profile.PackageManager == "pacman":
-		return [][]string{{"sudo", "pacman", "-S", "--noconfirm", "git"}}
-	case profile.PackageManager == "dnf":
-		return [][]string{{"sudo", "dnf", "install", "-y", "git"}}
-	case profile.PackageManager == "rpm-ostree":
-		return [][]string{{"rpm-ostree", "install", "-y", "--apply-live", "git"}}
 	default:
 		return nil
 	}
@@ -159,17 +109,6 @@ func installCommandsCurl(profile PlatformProfile) [][]string {
 	switch {
 	case profile.OS == "darwin":
 		return [][]string{{"brew", "install", "curl"}}
-	case profile.OS == "windows":
-		// curl is pre-installed on Windows 10+, no install command needed.
-		return nil
-	case profile.PackageManager == "apt":
-		return [][]string{{"sudo", "apt-get", "install", "-y", "curl"}}
-	case profile.PackageManager == "pacman":
-		return [][]string{{"sudo", "pacman", "-S", "--noconfirm", "curl"}}
-	case profile.PackageManager == "dnf":
-		return [][]string{{"sudo", "dnf", "install", "-y", "curl"}}
-	case profile.PackageManager == "rpm-ostree":
-		return [][]string{{"rpm-ostree", "install", "-y", "--apply-live", "curl"}}
 	default:
 		return nil
 	}
@@ -179,26 +118,6 @@ func installCommandsNode(profile PlatformProfile) [][]string {
 	switch {
 	case profile.OS == "darwin":
 		return [][]string{{"brew", "install", "node"}}
-	case profile.OS == "windows":
-		return [][]string{{"winget", "install", "--id", "OpenJS.NodeJS.LTS", "-e", "--accept-source-agreements", "--accept-package-agreements"}}
-	case profile.PackageManager == "apt":
-		// NodeSource LTS setup + install.
-		return [][]string{
-			{"bash", "-c", "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -"},
-			{"sudo", "apt-get", "install", "-y", "nodejs"},
-		}
-	case profile.PackageManager == "pacman":
-		return [][]string{{"sudo", "pacman", "-S", "--noconfirm", "nodejs", "npm"}}
-	case profile.PackageManager == "dnf":
-		// Use NodeSource LTS on Fedora/RHEL family for parity with apt-based LTS behavior.
-		return [][]string{
-			{"bash", "-c", "curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -"},
-			{"sudo", "dnf", "install", "-y", "nodejs"},
-		}
-	case profile.PackageManager == "rpm-ostree":
-		return [][]string{
-			{"rpm-ostree", "install", "-y", "--apply-live", "nodejs", "npm"},
-		}
 	default:
 		return nil
 	}
@@ -217,16 +136,6 @@ func installCommandsGo(profile PlatformProfile) [][]string {
 	switch {
 	case profile.OS == "darwin":
 		return [][]string{{"brew", "install", "go"}}
-	case profile.OS == "windows":
-		return [][]string{{"winget", "install", "--id", "GoLang.Go", "-e", "--accept-source-agreements", "--accept-package-agreements"}}
-	case profile.PackageManager == "apt":
-		return [][]string{{"sudo", "apt-get", "install", "-y", "golang"}}
-	case profile.PackageManager == "pacman":
-		return [][]string{{"sudo", "pacman", "-S", "--noconfirm", "go"}}
-	case profile.PackageManager == "dnf":
-		return [][]string{{"sudo", "dnf", "install", "-y", "golang"}}
-	case profile.PackageManager == "rpm-ostree":
-		return [][]string{{"rpm-ostree", "install", "-y", "--apply-live", "golang"}}
 	default:
 		return nil
 	}

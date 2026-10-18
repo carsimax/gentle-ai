@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -138,7 +137,6 @@ func prepareOpenCodeBackgroundActivation(homeDir string, resolution *OpenCodeBac
 	}
 
 	options := opencodeactivation.ActivationOptions{
-		OS:            runtime.GOOS,
 		Path:          os.Getenv("PATH"),
 		RunVersion:    runOpenCodeVersion,
 		AddToUserPath: addUserPath,

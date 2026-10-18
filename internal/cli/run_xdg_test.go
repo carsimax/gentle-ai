@@ -14,7 +14,6 @@ func TestRunInstallOpenCodeReviewVerifiesUnderXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(home, ".xdg")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	restoreHome := osUserHomeDir
@@ -34,7 +33,7 @@ func TestRunInstallOpenCodeReviewVerifiesUnderXDGConfigHome(t *testing.T) {
 		return filepath.Join(t.TempDir(), "engram"), nil
 	}
 
-	result, err := RunInstall([]string{"--agent", "opencode", "--component", "persona"}, linuxDetectionResult(system.LinuxDistroUbuntu, "apt"))
+	result, err := RunInstall([]string{"--agent", "opencode", "--component", "persona"}, nonBrewDetectionResult(t))
 	if err != nil {
 		t.Fatalf("RunInstall() error = %v", err)
 	}

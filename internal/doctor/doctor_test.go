@@ -63,7 +63,7 @@ func TestNewRemedyClassifiesCurrentRemedies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		r := NewRemedy(tt.id, "guidance")
-		if r.Description != "guidance" || r.Category != tt.category || r.ActionMode != tt.mode || r.Eligible != tt.eligible || r.EligibilityReason == "" || len(r.SupportedPlatforms) != 4 {
+		if r.Description != "guidance" || r.Category != tt.category || r.ActionMode != tt.mode || r.Eligible != tt.eligible || r.EligibilityReason == "" || len(r.SupportedPlatforms) != 1 || r.SupportedPlatforms[0] != PlatformMacOS {
 			t.Errorf("NewRemedy(%q) = %#v", tt.id, r)
 		}
 	}

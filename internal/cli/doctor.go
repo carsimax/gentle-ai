@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -75,8 +74,6 @@ var (
 	lookPathFn          = exec.LookPath
 	availableBytesFn    = storage.AvailableBytes
 	osUserHomeDirDoctor = os.UserHomeDir
-	doctorGOOS          = runtime.GOOS
-	executableExtsFn    = executableExtensions
 	pathDirsFn          = func() []string {
 		return filepath.SplitList(os.Getenv("PATH"))
 	}
@@ -121,7 +118,7 @@ func RunDoctor(ctx context.Context, w io.Writer) error {
 		doctor.Check{ID: doctor.CheckEngramReachable, Run: func(ctx context.Context) doctor.Result { return checkEngramReachable(ctx, homeDir, installedAgents) }},
 		doctor.Check{ID: doctor.CheckDiskSpace, Run: func(context.Context) doctor.Result { return checkDiskSpace(homeDir) }},
 	)
-	if installedState.BackgroundIntent == model.OpenCodeBackgroundOn && doctorGOOS != "windows" {
+	if installedState.BackgroundIntent == model.OpenCodeBackgroundOn {
 		checks = append(checks, doctor.Check{ID: doctor.CheckOpenCodeProfile, Run: func(context.Context) doctor.Result {
 			return checkOpenCodeProfile(homeDir, pathDirs)
 		}})
@@ -146,7 +143,6 @@ func checkOpenCodeProfile(homeDir string, pathDirs []string) CheckResult {
 	const id = doctor.CheckOpenCodeProfile
 	binDir := opencode.BinDir(homeDir)
 	resolution := opencode.ResolveLoginShellActivation(homeDir, opencode.ActivationOptions{
-		OS:   doctorGOOS,
 		Path: strings.Join(pathDirs, string(os.PathListSeparator)),
 	})
 	switch resolution.Status {
@@ -207,7 +203,7 @@ func requiredDoctorTools(installedAgents []string) []string {
 }
 
 func checkOneToolContext(ctx context.Context, tool string, pathDirs []string) CheckResult {
-	resolved, shim, err := resolveDoctorTool(tool)
+	resolved, err := resolveDoctorTool(tool)
 	if err != nil {
 		// resolved is "" here: there is no PATH-resolved copy to name or to
 		// compare against, but the executable running THIS check is still
@@ -235,7 +231,7 @@ func checkOneToolContext(ctx context.Context, tool string, pathDirs []string) Ch
 			Name:   doctor.ToolCheckID(tool),
 			Status: CheckStatusWarn,
 			Detail: fmt.Sprintf("%s resolved to %s; %s precedes the Gentle AI managed launcher %s on PATH, so bare %s bypasses the launcher that delegates to it (copies in PATH order: %s)", tool, resolved, shadow.target, shadow.launcher, tool, strings.Join(copies, ", ")),
-			Remedy: doctor.NewRemedy(doctor.RemedyReorderPath, "Move "+binDir+" ahead of "+filepath.Dir(shadow.target)+" in PATH, then open a new terminal; keep both files, since the launcher delegates to "+shadow.target+". On Windows, machine PATH entries come before user PATH entries, so reorder or remove the machine entry."),
+			Remedy: doctor.NewRemedy(doctor.RemedyReorderPath, "Move "+binDir+" ahead of "+filepath.Dir(shadow.target)+" in PATH, then open a new terminal; keep both files, since the launcher delegates to "+shadow.target+"."),
 		}
 	}
 	if len(copies) > 1 {
@@ -255,9 +251,6 @@ func checkOneToolContext(ctx context.Context, tool string, pathDirs []string) Ch
 	}
 
 	detail := tool + " found at " + resolved
-	if shim != "" {
-		detail += " (" + shim + ")"
-	}
 	if target, ok := doctorManagedLauncherTarget(resolved); ok {
 		detail += " (Gentle AI managed launcher for " + target + ")"
 	}
@@ -322,19 +315,8 @@ func doctorSameExecutable(a, b string) bool {
 	return resolvedA == resolvedB
 }
 
-func resolveDoctorTool(tool string) (string, string, error) {
-	resolved, err := lookPathFn(tool)
-	if err == nil {
-		return resolved, "", nil
-	}
-	if doctorGOOS != "windows" {
-		return "", "", err
-	}
-	resolved, ps1Err := lookPathFn(tool + ".ps1")
-	if ps1Err != nil {
-		return "", "", err
-	}
-	return resolved, "PowerShell shim", nil
+func resolveDoctorTool(tool string) (string, error) {
+	return lookPathFn(tool)
 }
 
 func doctorToolCopies(tool string, pathDirs []string) []string {
@@ -407,7 +389,7 @@ func doctorManagedLauncherTarget(path string) (string, bool) {
 }
 
 // doctorSameFile reports whether a and b name the same file, tolerating
-// symlinks, short names, and Windows case differences.
+// symlinks and short names.
 func doctorSameFile(a, b string) bool {
 	if infoA, err := os.Stat(a); err == nil {
 		if infoB, err := os.Stat(b); err == nil {
@@ -426,87 +408,20 @@ func doctorSameFile(a, b string) bool {
 }
 
 func doctorSamePath(a, b string) bool {
-	a, b = filepath.Clean(a), filepath.Clean(b)
-	if doctorGOOS == "windows" {
-		return strings.EqualFold(a, b)
-	}
-	return a == b
-}
-
-// executableExtensions returns the filename suffixes to probe when scanning a
-// PATH directory for a tool binary. On Windows it mirrors exec.LookPath, which
-// resolves a bare name like "gentle-ai" to "gentle-ai.exe"/".cmd" via PATHEXT;
-// on other platforms the bare name is used as-is. Without this, the duplicate
-// scan never matches real Windows binaries and PATH shadowing goes unreported.
-func executableExtensions() []string {
-	return executableExtensionsFor(doctorGOOS, os.Getenv("PATHEXT"))
-}
-
-func executableExtensionsFor(goos, pathext string) []string {
-	if goos != "windows" {
-		return []string{""}
-	}
-	if pathext == "" {
-		return []string{".com", ".exe", ".bat", ".cmd"}
-	}
-	var exts []string
-	for _, e := range strings.Split(pathext, ";") {
-		e = strings.ToLower(strings.TrimSpace(e))
-		if e == "" {
-			continue
-		}
-		if !strings.HasPrefix(e, ".") {
-			e = "." + e
-		}
-		exts = append(exts, e)
-	}
-	return exts
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // toolInDir returns the path to tool's executable inside dir, or "" if absent.
-// It honors Windows executable extensions so the duplicate scan agrees with
-// exec.LookPath (used for the resolved path). On non-Windows platforms the
-// candidate must also have at least one execute bit set — files without the
+// The candidate must have at least one execute bit set — files without the
 // execute bit (or directories whose name happens to match a tool, e.g. a
 // PATH entry named "gentle-ai") are not counted as binaries (#709).
-//
-// Windows executable resolution (#177, PATHEXT gaps) is intentionally out of
-// scope here; an extension match is treated as sufficient on Windows because
-// LookPath already enforces PATHEXT when reporting the resolved path.
 func toolInDir(dir, tool string) string {
-	for _, ext := range doctorToolExecutableExts() {
-		candidate := filepath.Join(dir, tool+ext)
-		info, err := os.Stat(candidate)
-		if err != nil {
-			continue
-		}
-		if !info.Mode().IsRegular() {
-			continue
-		}
-		if doctorGOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
-			continue
-		}
-		return candidate
+	candidate := filepath.Join(dir, tool)
+	info, err := os.Stat(candidate)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return ""
 	}
-	return ""
-}
-
-func doctorToolExecutableExts() []string {
-	exts := append([]string(nil), executableExtsFn()...)
-	if doctorGOOS == "windows" {
-		exts = appendUniqueExt(exts, "")
-		exts = appendUniqueExt(exts, ".ps1")
-	}
-	return exts
-}
-
-func appendUniqueExt(exts []string, ext string) []string {
-	for _, existing := range exts {
-		if strings.EqualFold(existing, ext) {
-			return exts
-		}
-	}
-	return append(exts, ext)
+	return candidate
 }
 
 // checkStateJSON validates ~/.gentle-ai/state.json and agent config dirs.
@@ -662,9 +577,7 @@ func danglingAncestor(homeDir, path string) (string, error) {
 				return "", nil // nearest existing ancestor is real; path is genuinely missing
 			}
 			// A non-directory ancestor blocks both inspection and restoration:
-			// sync cannot mkdir below a regular file. POSIX surfaces this as
-			// ENOTDIR at the final lstat, but Windows reports it as not-exist,
-			// which is how the walk gets here.
+			// sync cannot mkdir below a regular file.
 			return "", fmt.Errorf("ancestor %s is not a directory", ancestor) // refusal:by-design world-action: the caller embeds this cause in a warn that already names the continuation (inspect or repair the path, re-run 'gentle-ai doctor'); the repair itself happens on the filesystem, not through a command
 		}
 		if _, err := os.Stat(ancestor); os.IsNotExist(err) {
@@ -910,7 +823,7 @@ func doctorAssetSyncRemediation() string {
 		return "cannot determine the absolute invoked executable path; run sync using the absolute path of this running build to update installed assets"
 	}
 	remedy := fmt.Sprintf("run `%s sync` to update installed assets", managedAssetsExecutableToken(invoked))
-	if resolved, _, err := resolveDoctorTool("gentle-ai"); err == nil && !doctorSameExecutable(invoked, resolved) {
+	if resolved, err := resolveDoctorTool("gentle-ai"); err == nil && !doctorSameExecutable(invoked, resolved) {
 		remedy += fmt.Sprintf("; gentle-ai on PATH resolves to %s, which differs from the running executable; use the invoked path above", resolved)
 	}
 	return remedy

@@ -168,7 +168,7 @@ func TestBuildConfigGGAMatcher(t *testing.T) {
 	runGit(t, "add", "-f", ".")
 	runGit(t, "commit", "-q", "-m", "fixtures")
 	// Use a small second change for normalization cases: repeated process
-	// launches in the shell filter are comparatively expensive on Windows.
+	// launches in the shell filter are comparatively expensive.
 	for _, file := range []string{"src/auth.ts", "src/auth.test.ts", "notes.txt", "deleted.ts"} {
 		if err := os.WriteFile(filepath.Join(repo, filepath.FromSlash(file)), []byte("updated fixture\n"), 0o644); err != nil {
 			t.Fatal(err)
@@ -248,7 +248,6 @@ func TestBuildConfigDifferentProviders(t *testing.T) {
 
 func TestInjectWritesConfigAndAgents(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 
 	result, err := Inject(home, []model.AgentID{model.AgentClaudeCode})
 	if err != nil {
@@ -297,7 +296,6 @@ func TestInjectWritesConfigAndAgents(t *testing.T) {
 
 func TestInjectIsIdempotent(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 
 	first, err := Inject(home, []model.AgentID{model.AgentOpenCode})
 	if err != nil {
@@ -317,7 +315,7 @@ func TestInjectIsIdempotent(t *testing.T) {
 }
 
 func TestConfigPath(t *testing.T) {
-	// On non-Windows hosts the path follows XDG convention.
+	// The path follows XDG convention.
 	path := ConfigPath("/home/testuser")
 
 	// Must NOT have .json extension (shell-sourced, no extension).
@@ -337,79 +335,11 @@ func TestAgentsTemplatePath(t *testing.T) {
 	}
 }
 
-func TestGGAConfigDirLinux(t *testing.T) {
-	tests := []struct {
-		name    string
-		homeDir string
-		want    string
-	}{
-		{
-			name:    "standard home dir",
-			homeDir: "/home/user",
-			want:    filepath.Join("/home/user", ".config", "gga"),
-		},
-		{
-			name:    "root home dir",
-			homeDir: "/root",
-			want:    filepath.Join("/root", ".config", "gga"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ggaConfigDir(tt.homeDir, "linux")
-			if got != tt.want {
-				t.Fatalf("ggaConfigDir(%q, \"linux\") = %q, want %q", tt.homeDir, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGGAConfigDirDarwin(t *testing.T) {
-	got := ggaConfigDir("/Users/testuser", "darwin")
+	got := ggaConfigDir("/Users/testuser")
 	want := filepath.Join("/Users/testuser", ".config", "gga")
 	if got != want {
-		t.Fatalf("ggaConfigDir(%q, \"darwin\") = %q, want %q", "/Users/testuser", got, want)
-	}
-}
-
-func TestGGAConfigDirWindows(t *testing.T) {
-	tests := []struct {
-		name       string
-		homeDir    string
-		appDataEnv string
-		wantSuffix string
-	}{
-		{
-			name:       "APPDATA set to standard roaming path",
-			homeDir:    `C:\Users\testuser`,
-			appDataEnv: `C:\Users\testuser\AppData\Roaming`,
-			wantSuffix: filepath.Join(`C:\Users\testuser\AppData\Roaming`, "gga"),
-		},
-		{
-			name:       "APPDATA set to custom path",
-			homeDir:    `C:\Users\other`,
-			appDataEnv: `D:\custom\appdata`,
-			wantSuffix: filepath.Join(`D:\custom\appdata`, "gga"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("APPDATA", tt.appDataEnv)
-			got := ggaConfigDir(tt.homeDir, "windows")
-			if got != tt.wantSuffix {
-				t.Fatalf("ggaConfigDir(%q, \"windows\") = %q, want %q", tt.homeDir, got, tt.wantSuffix)
-			}
-		})
-	}
-}
-
-func TestGGAConfigDirWindowsNoAPPDATA(t *testing.T) {
-	// When APPDATA is unset, the fallback must be derived from homeDir.
-	t.Setenv("APPDATA", "")
-	got := ggaConfigDir(`C:\Users\testuser`, "windows")
-	want := filepath.Join(`C:\Users\testuser`, "AppData", "Roaming", "gga")
-	if got != want {
-		t.Fatalf("ggaConfigDir fallback = %q, want %q", got, want)
+		t.Fatalf("ggaConfigDir(%q) = %q, want %q", "/Users/testuser", got, want)
 	}
 }
 

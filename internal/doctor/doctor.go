@@ -66,12 +66,8 @@ const (
 // Platform identifies an operating environment supported by a remedy.
 type Platform string
 
-const (
-	PlatformWindows Platform = "windows"
-	PlatformMacOS   Platform = "macos"
-	PlatformLinux   Platform = "linux"
-	PlatformWSL     Platform = "wsl"
-)
+// PlatformMacOS is macOS on Apple Silicon, the only supported platform.
+const PlatformMacOS Platform = "macos"
 
 // Remedy describes a possible response without performing it.
 type Remedy struct {
@@ -114,7 +110,7 @@ func NewRemedy(id RemedyID, description string) *Remedy {
 }
 
 func supportedPlatforms() []Platform {
-	return []Platform{PlatformWindows, PlatformMacOS, PlatformLinux, PlatformWSL}
+	return []Platform{PlatformMacOS}
 }
 
 // Result contains evidence produced by one check.

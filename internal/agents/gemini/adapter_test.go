@@ -100,21 +100,6 @@ func TestInstallCommand(t *testing.T) {
 			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew"},
 			want:    [][]string{{"npm", "install", "-g", "--ignore-scripts", "@google/gemini-cli@latest"}},
 		},
-		{
-			name:    "linux system npm uses sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			want:    [][]string{{"sudo", "npm", "install", "-g", "--ignore-scripts", "@google/gemini-cli@latest"}},
-		},
-		{
-			name:    "linux nvm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", NpmWritable: true},
-			want:    [][]string{{"npm", "install", "-g", "--ignore-scripts", "@google/gemini-cli@latest"}},
-		},
-		{
-			name:    "windows uses npm without sudo",
-			profile: system.PlatformProfile{OS: "windows", PackageManager: "winget", NpmWritable: true},
-			want:    [][]string{{"npm", "install", "-g", "--ignore-scripts", "@google/gemini-cli@latest"}},
-		},
 	}
 
 	for _, tt := range tests {

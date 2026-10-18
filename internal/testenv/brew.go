@@ -3,7 +3,6 @@ package testenv
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -11,7 +10,7 @@ import (
 func RunBrewProbeFixture() {
 	name := filepath.Base(os.Args[0])
 	mode := os.Getenv("GENTLE_AI_TEST_BREW_PROBE")
-	if mode == "" || (name != "brew" && name != "brew.exe") {
+	if mode == "" || name != "brew" {
 		return
 	}
 	if len(os.Args) != 3 || os.Args[1] != "help" || os.Args[2] != "trust" {
@@ -35,11 +34,7 @@ func BrewProbe(t *testing.T, supported bool) {
 		t.Fatal(err)
 	}
 	bin := t.TempDir()
-	name := "brew"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	if err := os.WriteFile(filepath.Join(bin, name), data, 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(bin, "brew"), data, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	mode := "legacy"

@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,8 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 )
 
 // reviewStopHookTestPayload builds one Stop hook stdin payload. Extra fields
@@ -628,19 +625,5 @@ func TestReviewStopHookSilentWhenRDDOffAndTheCloneOverrideCannotBeValidated(t *t
 	}
 	if _, err := os.Stat(reviewStopHookStateFile(home, "sess-off-unvalidatable")); !os.IsNotExist(err) {
 		t.Fatalf("expected no reminder state file while RDD is off, stat err=%v", err)
-	}
-}
-
-// #4670 S3: a review authority that cannot live on this filesystem means no
-// review can start here, so the reminder has nothing to point at. The hook
-// stays quiet for that typed refusal and still fails on anything else.
-func TestReviewStopHookQuietOnlyForAnUnsupportedAuthorityFilesystem(t *testing.T) {
-	unsupported := fmt.Errorf("resolve review mode: %w",
-		&reviewtransaction.UnsupportedAuthorityFilesystemError{Path: `\\server\share\repo\.git`, Remote: true})
-	if !reviewStopHookAuthorityUnsupported(unsupported) {
-		t.Fatalf("typed unsupported-filesystem refusal was not recognised: %v", unsupported)
-	}
-	if reviewStopHookAuthorityUnsupported(errors.New("unsafe RAR authority path")) {
-		t.Fatal("an ordinary resolution failure was silenced")
 	}
 }

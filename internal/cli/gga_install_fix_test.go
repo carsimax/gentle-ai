@@ -14,8 +14,8 @@ import (
 // TestGGAFixInstallErrorWhenAlreadyAvailable tests that when GGA install
 // command fails but GGA is already available on the system, the error is
 // swallowed and the pipeline continues instead of failing.
-// This simulates the Windows scenario where install.sh fails due to TTY
-// issues but GGA is already present.
+// This simulates an install script that fails due to TTY issues while GGA is
+// already present.
 func TestGGAFixInstallErrorWhenAlreadyAvailable(t *testing.T) {
 	home := t.TempDir()
 
@@ -24,14 +24,12 @@ func TestGGAFixInstallErrorWhenAlreadyAvailable(t *testing.T) {
 	origCmdLookPath := cmdLookPath
 	origRunCmd := runCommand
 	origGGAAvailableCheck := ggaAvailableCheck
-	origCleanup := cleanupGGAInstallDir
 
 	t.Cleanup(func() {
 		osUserHomeDir = origHome
 		cmdLookPath = origCmdLookPath
 		runCommand = origRunCmd
 		ggaAvailableCheck = origGGAAvailableCheck
-		cleanupGGAInstallDir = origCleanup
 	})
 
 	// Setup mocks
@@ -49,7 +47,7 @@ func TestGGAFixInstallErrorWhenAlreadyAvailable(t *testing.T) {
 		// it to no test at all, so a shard log shows a bare "gga install
 		// command reported an error" warning quoting a real-looking git clone.
 		// That has already been misread once as a live network clone hanging
-		// the Windows lane; the "simulated" marker makes the fixture
+		// a CI lane; the "simulated" marker makes the fixture
 		// unmistakable in a log where nothing else names this test.
 		return errors.New("simulated install failure: exit status 1: read: open /dev/tty: no such device or address")
 	}
@@ -61,7 +59,6 @@ func TestGGAFixInstallErrorWhenAlreadyAvailable(t *testing.T) {
 		// (this is the fix scenario: install failed but GGA is there)
 		return runCommandCalled
 	}
-	cleanupGGAInstallDir = func() error { return nil }
 
 	// Create a minimal config so the test can run
 	configPath := filepath.Join(home, ".config", "opencode", "opencode.json")
@@ -73,7 +70,7 @@ func TestGGAFixInstallErrorWhenAlreadyAvailable(t *testing.T) {
 	}
 
 	// Create the runtime manually to test the component step
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
+	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
 	step := componentApplyStep{
 		id:           "component:gga",
 		component:    model.ComponentGGA,
@@ -107,14 +104,12 @@ func TestGGAFixInstallErrorWhenNotAvailable(t *testing.T) {
 	origRunCmd := runCommand
 	origGGAAvailableCheck := ggaAvailableCheck
 	origCmdLookPath := cmdLookPath
-	origCleanup := cleanupGGAInstallDir
 
 	t.Cleanup(func() {
 		osUserHomeDir = origHome
 		runCommand = origRunCmd
 		ggaAvailableCheck = origGGAAvailableCheck
 		cmdLookPath = origCmdLookPath
-		cleanupGGAInstallDir = origCleanup
 	})
 
 	osUserHomeDir = func() (string, error) { return home, nil }
@@ -126,7 +121,6 @@ func TestGGAFixInstallErrorWhenNotAvailable(t *testing.T) {
 	ggaAvailableCheck = func(profile system.PlatformProfile) bool {
 		return false
 	}
-	cleanupGGAInstallDir = func() error { return nil }
 
 	// Simulate a REAL install error (not the TTY issue)
 	runCommand = func(name string, args ...string) error {
@@ -141,7 +135,7 @@ func TestGGAFixInstallErrorWhenNotAvailable(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	profile := system.PlatformProfile{OS: "windows", PackageManager: "winget"}
+	profile := system.PlatformProfile{OS: "darwin", PackageManager: "brew"}
 	step := componentApplyStep{
 		id:           "component:gga",
 		component:    model.ComponentGGA,

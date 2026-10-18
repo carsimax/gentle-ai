@@ -5,12 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
-
-	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
 const doctorToolProbeTimeout = 5 * time.Second
@@ -24,24 +19,13 @@ func probeDoctorTool(parent context.Context, tool, path string) error {
 	if tool == "engram" {
 		arg = "version"
 	}
-	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, name, args...)
-		// A child that inherits output handles must not keep Wait blocked forever.
-		cmd.WaitDelay = 100 * time.Millisecond
-		return nil, runDoctorProbeCommand(ctx, cmd)
+	cmd, err := doctorToolProbeCommand(ctx, path, arg)
+	if err != nil {
+		return err
 	}
-	var err error
-	if runtime.GOOS == "windows" && strings.EqualFold(filepath.Ext(path), ".ps1") {
-		runner := system.PowerShellRunner{LookPath: exec.LookPath, RunCommand: run}
-		_, err = runner.Run(ctx, "-NoProfile", "-NonInteractive", "-File", path, arg)
-	} else {
-		cmd, buildErr := doctorToolProbeCommand(ctx, path, arg)
-		if buildErr != nil {
-			return buildErr
-		}
-		cmd.WaitDelay = 100 * time.Millisecond
-		err = runDoctorProbeCommand(ctx, cmd)
-	}
+	// A child that inherits output handles must not keep Wait blocked forever.
+	cmd.WaitDelay = 100 * time.Millisecond
+	err = runDoctorProbeCommand(ctx, cmd)
 	if parent.Err() != nil {
 		return parent.Err()
 	}

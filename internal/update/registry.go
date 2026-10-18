@@ -24,13 +24,12 @@ var Tools = []ToolInfo{
 		DetectCmd:     nil, // version comes from build-time ldflags (app.Version)
 		VersionPrefix: "v",
 		// gentle-ai: Homebrew when the package is brew-owned, authenticated binary
-		// release download on Linux/macOS, and `go install` on Windows, where no
-		// official signed binary is published.
+		// release download otherwise.
 		InstallMethod: InstallBinary,
-		// GoImportPath is what makes the Windows self-upgrade possible. It is
+		// GoImportPath is used only by unanchored source builds. It is
 		// deliberately NOT a general opt-in to go-install: effectiveMethod routes
-		// gentle-ai on Linux/macOS to InstallBinary regardless of this field, so
-		// those platforms keep the minisign-verified release download.
+		// anchored release builds to InstallBinary regardless of this field, so
+		// they keep the minisign-verified release download.
 		//
 		// The path stores the module/import base WITHOUT the /vN suffix; the
 		// /vN suffix is derived at composition time from the target version via
@@ -47,20 +46,12 @@ var Tools = []ToolInfo{
 		ReleaseTagPattern: `^v[0-9]+\.[0-9]+\.[0-9]+$`,
 		// engram: Homebrew when the package is brew-owned, binary download elsewhere.
 		InstallMethod: InstallBinary,
-		// FallbackPaths covers the Windows stale-PATH scenario (and Linux ~/.local/bin
-		// when not yet in PATH): AddToUserPath updates the registry/profile but the
-		// current process does not see the change until a new shell session starts.
-		FallbackPaths: func(homeDir, localAppData string) []string {
+		// FallbackPaths covers ~/.local/bin when not yet in PATH: the shell
+		// profile is updated but the current process does not see the change
+		// until a new shell session starts.
+		FallbackPaths: func(homeDir string) []string {
 			var paths []string
-			// Windows: %LOCALAPPDATA%\engram\bin\engram.exe
-			if localAppData != "" {
-				paths = append(paths, filepath.Join(localAppData, "engram", "bin", "engram.exe"))
-			} else if homeDir != "" {
-				// LOCALAPPDATA is not set (e.g. restricted environment or CI on Windows).
-				// Derive the standard path from homeDir for parity with the installer.
-				paths = append(paths, filepath.Join(homeDir, "AppData", "Local", "engram", "bin", "engram.exe"))
-			}
-			// Linux/macOS: ~/.local/bin/engram (when /usr/local/bin is not writable,
+			// ~/.local/bin/engram (when /usr/local/bin is not writable,
 			// the binary installer places it here, which may not be in PATH yet).
 			if homeDir != "" {
 				paths = append(paths, filepath.Join(homeDir, ".local", "bin", "engram"))
@@ -78,17 +69,15 @@ var Tools = []ToolInfo{
 		// GGA does not publish pre-built release binary assets — only source archives.
 		// Using InstallScript runs curl | bash via the project's install.sh.
 		InstallMethod: InstallScript,
-		// FallbackPaths covers the Windows stale-PATH scenario: gga installs a
-		// PowerShell shim to ~/bin/gga.ps1, and the bash script to ~/.local/bin/gga.
-		// Both locations may not be in PATH immediately after install.
-		FallbackPaths: func(homeDir, localAppData string) []string {
+		// FallbackPaths covers the stale-PATH scenario: the gga install script
+		// places the binary in ~/.local/bin/gga or ~/bin/gga, which may not be in
+		// PATH immediately after install.
+		FallbackPaths: func(homeDir string) []string {
 			var paths []string
 			if homeDir != "" {
-				// Windows: ~/bin/gga.ps1 (PowerShell shim, callable as "gga" in PS)
-				paths = append(paths, filepath.Join(homeDir, "bin", "gga.ps1"))
-				// Linux/macOS: ~/.local/bin/gga
+				// ~/.local/bin/gga
 				paths = append(paths, filepath.Join(homeDir, ".local", "bin", "gga"))
-				// Linux/macOS: ~/bin/gga
+				// ~/bin/gga
 				paths = append(paths, filepath.Join(homeDir, "bin", "gga"))
 			}
 			return paths

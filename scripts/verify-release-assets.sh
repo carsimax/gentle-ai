@@ -32,10 +32,7 @@ fi
 [[ "$contract_semver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || die "provider contract semver is invalid"
 
 archives=(
-  "gentle-ai_${version}_darwin_amd64.tar.gz"
   "gentle-ai_${version}_darwin_arm64.tar.gz"
-  "gentle-ai_${version}_linux_amd64.tar.gz"
-  "gentle-ai_${version}_linux_arm64.tar.gz"
   "gentle-ai-review-provider-contract-${contract_semver}.tar.gz"
   # The deterministic provenance manifest (#3854) is a signed, checksummed
   # archive like the others: the publication policy requires it, so the

@@ -4,27 +4,12 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 )
-
-// runtimeGOOS and syncDirFn are package-level vars so tests can override them
-// without spawning a real Windows process.
-//
-// Background: Windows/NTFS does not support fsyncing a directory file
-// descriptor. Calling (*os.File).Sync() on a directory handle returns
-// ERROR_ACCESS_DENIED (syscall 5) regardless of user privileges — even as
-// Administrator. FlushFileBuffers requires GENERIC_WRITE access on the handle,
-// which Windows refuses for directories. The ErrPermission from syncDirFn is
-// therefore silently tolerated when runtimeGOOS() == "windows". On Linux and
-// macOS the full error is propagated so unexpected failures are still surfaced.
-// See issues #293 and #294.
-var runtimeGOOS = func() string { return runtime.GOOS }
 
 // renameFn publishes the staged replacement. It is a package-level var so tests
 // can simulate a rename that reports success without taking effect: the shape
@@ -330,20 +315,9 @@ func replaceDurably(path string, src io.Reader, perm fs.FileMode) (landed bool, 
 }
 
 // SyncDir flushes dir's entries to stable storage so a published name survives
-// recovery.
-//
-// Windows/NTFS refuses to fsync a directory handle and returns ErrPermission
-// regardless of privilege; that specific error is tolerated there and nowhere
-// else, so a real failure (a full disk, say) still surfaces.
+// recovery. Every error is surfaced.
 func SyncDir(dir string) error {
-	err := syncDirFn(dir)
-	if err == nil {
-		return nil
-	}
-	if runtimeGOOS() == "windows" && errors.Is(err, os.ErrPermission) {
-		return nil
-	}
-	return err
+	return syncDirFn(dir)
 }
 
 // FileDigest returns the SHA-256 and size of the file at path, read from disk.

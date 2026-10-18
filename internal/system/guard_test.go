@@ -12,52 +12,28 @@ func TestEnsureSupportedOSAllowsMacOS(t *testing.T) {
 	}
 }
 
-func TestEnsureSupportedOSAllowsWindows(t *testing.T) {
-	if err := EnsureSupportedOS("windows"); err != nil {
-		t.Fatalf("expected no error for Windows, got %v", err)
-	}
-}
-
 func TestEnsureSupportedOSRejectsUnsupported(t *testing.T) {
-	err := EnsureSupportedOS("freebsd")
-	if err == nil {
-		t.Fatalf("expected error for unsupported OS")
-	}
+	for _, goos := range []string{"freebsd", "linux", "windows"} {
+		err := EnsureSupportedOS(goos)
+		if err == nil {
+			t.Fatalf("expected error for unsupported OS %q", goos)
+		}
 
-	if !errors.Is(err, ErrUnsupportedOS) {
-		t.Fatalf("expected ErrUnsupportedOS, got %v", err)
-	}
+		if !errors.Is(err, ErrUnsupportedOS) {
+			t.Fatalf("expected ErrUnsupportedOS, got %v", err)
+		}
 
-	if !strings.Contains(err.Error(), "only macOS, Linux, and Windows are supported") {
-		t.Fatalf("expected explicit OS support message, got %q", err.Error())
-	}
-}
-
-func TestEnsureSupportedPlatformAllowsSupportedLinux(t *testing.T) {
-	err := EnsureSupportedPlatform(PlatformProfile{OS: "linux", LinuxDistro: LinuxDistroUbuntu, Supported: true})
-	if err != nil {
-		t.Fatalf("expected ubuntu profile to be supported, got %v", err)
+		if !strings.Contains(err.Error(), "only macOS on Apple Silicon is supported") {
+			t.Fatalf("expected explicit OS support message, got %q", err.Error())
+		}
 	}
 }
 
-func TestEnsureSupportedPlatformAllowsSupportedFedoraLinux(t *testing.T) {
-	err := EnsureSupportedPlatform(PlatformProfile{OS: "linux", LinuxDistro: LinuxDistroFedora, PackageManager: "dnf", Supported: true})
-	if err != nil {
-		t.Fatalf("expected fedora profile to be supported, got %v", err)
+func TestEnsureSupportedPlatformFollowsOS(t *testing.T) {
+	if err := EnsureSupportedPlatform(PlatformProfile{OS: "darwin", PackageManager: "brew", Supported: true}); err != nil {
+		t.Fatalf("expected darwin profile to be supported, got %v", err)
 	}
-}
-
-func TestEnsureSupportedPlatformRejectsUnsupportedLinuxDistro(t *testing.T) {
-	err := EnsureSupportedPlatform(PlatformProfile{OS: "linux", LinuxDistro: LinuxDistroUnknown, Supported: false})
-	if err == nil {
-		t.Fatalf("expected error for unsupported linux distro")
-	}
-
-	if !errors.Is(err, ErrUnsupportedLinuxDistro) {
-		t.Fatalf("expected ErrUnsupportedLinuxDistro, got %v", err)
-	}
-
-	if !strings.Contains(err.Error(), "no package manager found on PATH") {
-		t.Fatalf("expected package-manager guard message, got %q", err.Error())
+	if err := EnsureSupportedPlatform(PlatformProfile{OS: "linux"}); !errors.Is(err, ErrUnsupportedOS) {
+		t.Fatalf("expected ErrUnsupportedOS for linux profile, got %v", err)
 	}
 }

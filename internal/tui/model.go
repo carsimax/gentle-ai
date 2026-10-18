@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -50,16 +49,7 @@ var updateCheckFn = update.CheckAll
 // Returns a non-nil error when the browser cannot be opened; callers fall back
 // to printing the URL to stdout.
 var tuiOpenBrowserFn = func(url string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = execCommandFn("open", url)
-	case "windows":
-		cmd = execCommandFn("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = execCommandFn("xdg-open", url)
-	}
-	return cmd.Start()
+	return execCommandFn("open", url).Start()
 }
 
 // advisoryFetchFn is the function used to fetch the advisory manifest.
@@ -3903,8 +3893,7 @@ func isHomebrewManagedBinary(execPath string) bool {
 		return true
 	}
 	return strings.HasPrefix(path, "/opt/homebrew/") ||
-		strings.HasPrefix(path, "/usr/local/Homebrew/") ||
-		strings.HasPrefix(path, "/home/linuxbrew/.linuxbrew/")
+		strings.HasPrefix(path, "/usr/local/Homebrew/")
 }
 
 func setOSExecutableForTest(path string, err error) func() {
@@ -4123,16 +4112,7 @@ func communityToolDefinitions() []communitytool.Definition {
 
 func openBrowserCmd(url string) tea.Cmd {
 	return func() tea.Msg {
-		var cmd *exec.Cmd
-		switch runtime.GOOS {
-		case "darwin":
-			cmd = execCommandFn("open", url)
-		case "windows":
-			cmd = execCommandFn("rundll32", "url.dll,FileProtocolHandler", url)
-		default:
-			cmd = execCommandFn("xdg-open", url)
-		}
-		_ = cmd.Start()
+		_ = execCommandFn("open", url).Start()
 		return nil
 	}
 }

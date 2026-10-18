@@ -174,22 +174,12 @@ test_stdin_execution_runs_main() {
     return 1
 }
 
-# Windows installer: stable must pin the latest release tag, never @latest,
-# which resolves /v4 to an unreleased pseudo-version before a v4.x tag exists.
-test_ps1_stable_pins_release_tag() {
-    local body
-    body="$(sed -n '/^function Install-ViaGo {/,/^}/p' "${SCRIPT_DIR}/install.ps1")"
-    case "${body}" in *'/releases/latest"'*) ;; *) printf '         Install-ViaGo does not resolve the release tag\n' >&2; return 1 ;; esac
-    assert_not_contains "Install-ViaGo" "${body}" '"latest"'
-}
-
 # ---- runner ------------------------------------------------------------------
 run_test "historical stable v3.7.0 resolves its /v3 module"            test_stable_v3_current
 run_test "current stable v4 resolves its /v4 module"                 test_stable_v4_regression
 run_test "beta channel derives module + env patterns from go.mod"     test_beta_v5_derives_module_and_env
 run_test "bad go.mod resolution fails closed (no install)"            test_go_mod_fail_closed
 run_test "stdin execution (curl | bash) still runs main"              test_stdin_execution_runs_main
-run_test "Windows stable installs the release tag, never @latest"     test_ps1_stable_pins_release_tag
 
 if [ "${TESTS_FAILED}" -eq 0 ]; then
     printf '%sok%s — %d/%d installer module-path tests passed\n' \

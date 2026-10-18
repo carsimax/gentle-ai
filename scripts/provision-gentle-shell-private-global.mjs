@@ -251,7 +251,7 @@ if (action === 'restore') {
     return !rule.includes(`!${value}`) && !rule.includes('!any') && (!rule.some(item => !item.startsWith('!')) || rule.includes(value) || rule.includes('any'));
   }
   // Darwin arm64 has no libc family: like npm, any libc rule makes a record inapplicable there.
-  const platform = process.platform === 'darwin' ? { os: 'darwin', cpu: 'arm64', libc: null } : { os: 'linux', cpu: 'x64', libc: 'glibc' };
+  const platform = { os: 'darwin', cpu: 'arm64', libc: null };
   const applicable = record => [matches(record.os, platform.os), matches(record.cpu, platform.cpu), matches(record.libc, platform.libc)].every(Boolean);
   if (action === 'install') {
     const actual = [];
@@ -382,13 +382,8 @@ if (action === 'restore') {
     physical(version, true);
     if (JSON.stringify(fs.readdirSync(version).sort()) !== '["gentle-ai","integrity.json"]') reject('native file set');
     const binary = read(path.join(version, 'gentle-ai'));
-    if (process.platform === 'darwin') {
-      const manifest = '{"version":"4.0.0","asset":"gentle-ai_4.0.0_darwin_arm64.tar.gz","assetSha256":"d2159caf6d68f367b18830ece6af71ef26963d5f5320d7df6a794773f45cc7e9","binarySha256":"18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb"}\n';
-      if (binary.length !== 16047186 || digest(binary) !== '18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb' || !read(path.join(version, 'integrity.json')).equals(Buffer.from(manifest))) reject('native independent readback');
-      return;
-    }
-    const manifest = '{"version":"4.0.0","asset":"gentle-ai_4.0.0_linux_amd64.tar.gz","assetSha256":"5f4417cf29c969c86da4799942fd673368840901be1bb09c779a12d7ed6096ea","binarySha256":"50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d"}\n';
-    if (binary.length !== 17109176 || digest(binary) !== '50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d' || !read(path.join(version, 'integrity.json')).equals(Buffer.from(manifest))) reject('native independent readback');
+    const manifest = '{"version":"4.0.0","asset":"gentle-ai_4.0.0_darwin_arm64.tar.gz","assetSha256":"d2159caf6d68f367b18830ece6af71ef26963d5f5320d7df6a794773f45cc7e9","binarySha256":"18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb"}\n';
+    if (binary.length !== 16047186 || digest(binary) !== '18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb' || !read(path.join(version, 'integrity.json')).equals(Buffer.from(manifest))) reject('native independent readback');
   }
   function materializeGlobal() {
     const parent = path.dirname(modules);

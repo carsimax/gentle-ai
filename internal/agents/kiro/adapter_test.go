@@ -288,32 +288,6 @@ func TestAdapter_InstallCommand_macOS(t *testing.T) {
 	}
 }
 
-func TestAdapter_InstallCommand_Linux(t *testing.T) {
-	adapter := NewAdapter()
-	profile := system.PlatformProfile{OS: "linux"}
-
-	_, err := adapter.InstallCommand(profile)
-	if err == nil {
-		t.Error("InstallCommand() should return error (auto-install not supported)")
-	}
-	if _, ok := err.(AgentNotInstallableError); !ok {
-		t.Errorf("InstallCommand() expected AgentNotInstallableError, got %T", err)
-	}
-}
-
-func TestAdapter_InstallCommand_Windows(t *testing.T) {
-	adapter := NewAdapter()
-	profile := system.PlatformProfile{OS: "windows"}
-
-	_, err := adapter.InstallCommand(profile)
-	if err == nil {
-		t.Error("InstallCommand() should return error (auto-install not supported)")
-	}
-	if _, ok := err.(AgentNotInstallableError); !ok {
-		t.Errorf("InstallCommand() expected AgentNotInstallableError, got %T", err)
-	}
-}
-
 func TestAdapter_SupportsFeatures(t *testing.T) {
 	adapter := NewAdapter()
 

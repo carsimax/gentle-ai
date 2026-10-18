@@ -22,13 +22,10 @@ func TestWriteFileAtomicReportsReplacementWhenParentSyncFails(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	origGOOS := runtimeGOOS
 	origSyncDir := syncDirFn
 	t.Cleanup(func() {
-		runtimeGOOS = origGOOS
 		syncDirFn = origSyncDir
 	})
-	runtimeGOOS = func() string { return "linux" }
 	syncDirFn = func(string) error { return errors.New("injected parent-directory sync failure") }
 
 	result, err := WriteFileAtomic(path, []byte("after"), 0o644)
@@ -58,13 +55,10 @@ func TestWriteFileAtomicReportsCreationWhenParentSyncFails(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "new.json")
 
-	origGOOS := runtimeGOOS
 	origSyncDir := syncDirFn
 	t.Cleanup(func() {
-		runtimeGOOS = origGOOS
 		syncDirFn = origSyncDir
 	})
-	runtimeGOOS = func() string { return "linux" }
 	syncDirFn = func(string) error { return errors.New("injected parent-directory sync failure") }
 
 	result, err := WriteFileAtomic(path, []byte("fresh"), 0o644)

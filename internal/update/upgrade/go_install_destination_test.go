@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -55,19 +54,6 @@ func stubGoEnv(t *testing.T, values map[string]string) {
 	}
 }
 
-// stubDetectOS pins the OS the strategy resolves the go-install destination
-// for. Without it these tests read runtime.GOOS and silently change meaning
-// with the host: the same fixture that writes "engram" is then checked against
-// "engram.exe" on a Windows runner, and every one of them fails for a reason
-// that has nothing to do with what it asserts. The Windows naming and
-// comparison rules have their own test, which passes osName explicitly.
-func stubDetectOS(t *testing.T, osName string) {
-	t.Helper()
-	origDetectOS := detectOS
-	t.Cleanup(func() { detectOS = origDetectOS })
-	detectOS = func() string { return osName }
-}
-
 // resolvedTempDir is t.TempDir() with symlinks and short names already
 // resolved, so a fixture path compares equal to the same path after the
 // production code normalizes it.
@@ -105,7 +91,6 @@ func goInstallResult() update.UpdateResult {
 }
 
 func TestGoInstallUpgradeIsSilentWhenDestinationMatchesEffectiveBinary(t *testing.T) {
-	stubDetectOS(t, "linux")
 	gobin := t.TempDir()
 	installed := writeFakeBinary(t, gobin, "engram")
 
@@ -116,7 +101,7 @@ func TestGoInstallUpgradeIsSilentWhenDestinationMatchesEffectiveBinary(t *testin
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -128,7 +113,6 @@ func TestGoInstallUpgradeIsSilentWhenDestinationMatchesEffectiveBinary(t *testin
 }
 
 func TestGoInstallUpgradeWarnsWhenDestinationDiffersFromEffectiveBinary(t *testing.T) {
-	stubDetectOS(t, "linux")
 	gobin := t.TempDir()
 	stale := t.TempDir()
 	installed := writeFakeBinary(t, gobin, "engram")
@@ -141,7 +125,7 @@ func TestGoInstallUpgradeWarnsWhenDestinationDiffersFromEffectiveBinary(t *testi
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -161,10 +145,6 @@ func TestGoInstallUpgradeWarnsWhenDestinationDiffersFromEffectiveBinary(t *testi
 }
 
 func TestGoInstallUpgradeTreatsSymlinkIntoGoBinAsMatch(t *testing.T) {
-	stubDetectOS(t, "linux")
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires elevated privileges on Windows runners")
-	}
 	gobin := t.TempDir()
 	localBin := t.TempDir()
 	installed := writeFakeBinary(t, gobin, "engram")
@@ -180,7 +160,7 @@ func TestGoInstallUpgradeTreatsSymlinkIntoGoBinAsMatch(t *testing.T) {
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -192,7 +172,6 @@ func TestGoInstallUpgradeTreatsSymlinkIntoGoBinAsMatch(t *testing.T) {
 }
 
 func TestGoInstallUpgradeFallsBackToGoPathBinWhenGoBinIsEmpty(t *testing.T) {
-	stubDetectOS(t, "linux")
 	gopath := t.TempDir()
 	installed := writeFakeBinary(t, filepath.Join(gopath, "bin"), "engram")
 
@@ -203,7 +182,7 @@ func TestGoInstallUpgradeFallsBackToGoPathBinWhenGoBinIsEmpty(t *testing.T) {
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -229,7 +208,7 @@ func TestGoInstallUpgradeReportsUnverifiedWhenGoEnvFails(t *testing.T) {
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -252,7 +231,7 @@ func TestGoInstallUpgradeReportsUnverifiedWhenPathLookupFails(t *testing.T) {
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -278,7 +257,7 @@ func TestGoInstallUpgradeReportsUnverifiedWhenNothingLandedInTheDestination(t *t
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "linux", PackageManager: "apt"})
+		_, upgradeErr = runStrategy(context.Background(), goInstallResult(), system.PlatformProfile{OS: "darwin"})
 	})
 
 	if upgradeErr != nil {
@@ -295,7 +274,6 @@ func TestGoInstallUpgradeReportsUnverifiedWhenNothingLandedInTheDestination(t *t
 // The beta self-upgrade runs the same `go install` mechanism and carries the
 // same silent-no-op risk, so it must be verified identically.
 func TestBetaGoInstallMainUpgradeWarnsWhenDestinationDiffers(t *testing.T) {
-	stubDetectOS(t, "linux")
 	gobin := t.TempDir()
 	stale := t.TempDir()
 	installed := writeFakeBinary(t, gobin, "gentle-ai")
@@ -321,7 +299,7 @@ func TestBetaGoInstallMainUpgradeWarnsWhenDestinationDiffers(t *testing.T) {
 
 	var upgradeErr error
 	stderr := captureStderr(t, func() {
-		_, upgradeErr = runStrategy(context.Background(), r, system.PlatformProfile{OS: "linux", PackageManager: "apt", Supported: true})
+		_, upgradeErr = runStrategy(context.Background(), r, system.PlatformProfile{OS: "darwin", Supported: true})
 	})
 
 	if upgradeErr != nil {
@@ -337,50 +315,17 @@ func TestBetaGoInstallMainUpgradeWarnsWhenDestinationDiffers(t *testing.T) {
 	}
 }
 
-// No real Windows execution happens in this suite; a synthetic "windows" osName
-// is the only way the Windows naming and comparison rules are exercised.
-func TestGoInstallDestinationNoticeOnWindowsMatchesExeAgainstCaseDifferentPath(t *testing.T) {
-	// Canonicalised up front because normalization resolves symlinks
-	// best-effort, and the two sides of this comparison do not resolve alike:
-	// the destination exists, so it expands, while the deliberately
-	// case-different PATH entry does not exist under that exact name and stays
-	// verbatim. On a Windows runner TEMP is reached through an 8.3 short name
-	// (RUNNER~1), so one side became ...\runneradmin\... and the other stayed
-	// ...\runner~1\..., and the test failed on a difference it never meant to
-	// introduce. Starting from the resolved form makes that expansion a no-op.
-	gobin := resolvedTempDir(t)
-	writeFakeBinary(t, gobin, "gentle-ai.exe")
-
-	origLookPath := lookPathFn
-	t.Cleanup(func() { lookPathFn = origLookPath })
-	lookPathFn = func(string) (string, error) { return filepath.Join(strings.ToUpper(gobin), "GENTLE-AI"), nil }
-
-	if notice := goInstallDestinationNotice("gentle-ai", "windows", gobin, nil); notice != "" {
-		t.Fatalf("windows destination must match despite case and .exe suffix; notice = %q", notice)
-	}
-
-	lookPathFn = func(string) (string, error) { return filepath.Join(t.TempDir(), "gentle-ai.exe"), nil }
-	notice := goInstallDestinationNotice("gentle-ai", "windows", gobin, nil)
-	if !strings.Contains(notice, filepath.Join(gobin, "gentle-ai.exe")) {
-		t.Fatalf("windows mismatch must name the .exe destination; notice = %q", notice)
-	}
-}
-
-func TestSameBinaryPathForOSHandlesWindowsCaseAndExeSuffix(t *testing.T) {
+func TestSameBinaryPathRequiresSameLocation(t *testing.T) {
 	base := t.TempDir()
-	installed := filepath.Join(base, "gentle-ai.exe")
-	effective := filepath.Join(strings.ToUpper(base), "GENTLE-AI")
+	installed := filepath.Join(base, "gentle-ai")
 
-	if !sameBinaryPathForOS(installed, effective, "windows") {
-		t.Errorf("windows comparison must ignore case and the .exe suffix: %q vs %q", installed, effective)
+	if !sameBinaryPath(installed, installed) {
+		t.Errorf("identical paths must compare equal: %q", installed)
 	}
-	if sameBinaryPathForOS(installed, effective, "linux") {
-		t.Errorf("non-windows comparison must stay case-sensitive: %q vs %q", installed, effective)
+	if sameBinaryPath(filepath.Join(base, "a", "gentle-ai"), filepath.Join(base, "b", "gentle-ai")) {
+		t.Error("different directories must not compare equal")
 	}
-	if sameBinaryPathForOS(filepath.Join(base, "a", "gentle-ai.exe"), filepath.Join(base, "b", "gentle-ai.exe"), "windows") {
-		t.Error("different windows directories must not compare equal")
-	}
-	if sameBinaryPathForOS("", installed, "windows") || sameBinaryPathForOS(installed, "", "windows") {
+	if sameBinaryPath("", installed) || sameBinaryPath(installed, "") {
 		t.Error("an empty path must never compare equal")
 	}
 }

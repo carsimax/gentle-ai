@@ -56,7 +56,6 @@ func TestInjectContext7PreservesConfiguredServers(t *testing.T) {
 				t.Setenv("HOME", home)
 				t.Setenv("PI_CODING_AGENT_DIR", filepath.Join(home, ".pi", "agent"))
 				t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-				t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 				first, err := Inject(home, home, adapter)
 				if err != nil || !first.Changed || len(first.Files) == 0 {
 					t.Fatalf("missing-entry install: result=%+v error=%v", first, err)

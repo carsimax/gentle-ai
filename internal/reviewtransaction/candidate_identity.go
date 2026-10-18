@@ -1,8 +1,7 @@
 // Package reviewtransaction — candidate identity resolver (Wave 1 Slice 2;
 // promoted out of the shadow gate in Wave 3 Slice 1, design decision 2).
 // This file used to be shadow_identity.go, part of the read-only shadow of
-// the target RDD relation model
-// (docs/architecture/rdd-root-simplification-design.md). Promotion means it
+// the target RDD relation model. Promotion means it
 // now serves the live ReviewCore (Wave 3 Slice 3+) directly — the Wave 1
 // shadow observer that used to independently resolve candidate identity
 // from a selector (shadowSelector/shadowCandidateIdentity and everything

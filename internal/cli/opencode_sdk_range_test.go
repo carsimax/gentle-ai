@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -74,9 +73,6 @@ func TestV2SDKPreflightAcceptsSameMajorAtOrAboveMinimum(t *testing.T) {
 }
 
 func TestV2SDKPreflightRefusesOlderOrOtherMajorWithExactPin(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX continuation text")
-	}
 	for _, tc := range []struct{ name, manifest, version, want string }{
 		{"older npm", `{"packageManager":"npm@10.8.0"}`, "2.0.3", "npm install --save-exact --no-audit --no-fund @opencode/plugin@2.0.4"},
 		{"V1 major npm", `{"packageManager":"npm@10.8.0"}`, "1.18.15", "npm install --save-exact --no-audit --no-fund @opencode/plugin@2.0.4"},
@@ -124,9 +120,6 @@ func TestV2SDKApprovedNPMInstallPinsExactly(t *testing.T) {
 // stop with ERESOLVE. The refusal must name that case and give a remedy that
 // neither prunes the peer tree (--legacy-peer-deps) nor forces the conflict.
 func TestV2SDKRefusalNamesV1PeerConflictRemedy(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX continuation text")
-	}
 	home, config := sdkRangeConfig(t, `{"packageManager":"npm@10.8.0"}`, "")
 	writeSDKRangeFile(t, filepath.Join(config, "node_modules", "@opencode-ai", "plugin", "package.json"), `{"version":"1.18.15"}`)
 	preflight := (openCodePluginDependencyPreflightStep{homeDir: home}).Run()
@@ -167,16 +160,16 @@ func TestV2SDKRefusalNamesV1PeerConflictRemedy(t *testing.T) {
 
 func TestV2SDKPeerConflictHintScope(t *testing.T) {
 	config := t.TempDir()
-	if hint := openCodeSDKPeerConflictHint("linux", config, "npm", "@opencode/plugin@2.0.4"); hint != "" {
+	if hint := openCodeSDKPeerConflictHint(config, "npm", "@opencode/plugin@2.0.4"); hint != "" {
 		t.Fatalf("hint without a V1 SDK: %s", hint)
 	}
 	writeSDKRangeFile(t, filepath.Join(config, "node_modules", "@opencode-ai", "plugin", "package.json"), `{"version":"1.18.15"}`)
-	if hint := openCodeSDKPeerConflictHint("linux", config, "bun", "@opencode/plugin@2.0.4"); hint != "" {
+	if hint := openCodeSDKPeerConflictHint(config, "bun", "@opencode/plugin@2.0.4"); hint != "" {
 		t.Fatalf("npm ERESOLVE hint for a Bun-owned directory: %s", hint)
 	}
-	hint := openCodeSDKPeerConflictHint("windows", config, "npm", "@opencode/plugin@2.0.4")
-	if !strings.Contains(hint, "PowerShell: Set-Location -LiteralPath") || !strings.Contains(hint, "npm install --save-exact --force --no-audit --no-fund @opencode/plugin@2.0.4") || strings.Contains(hint, "`") {
-		t.Fatalf("Windows peer-conflict remedy is not a PowerShell command: %s", hint)
+	hint := openCodeSDKPeerConflictHint(config, "npm", "@opencode/plugin@2.0.4")
+	if !strings.Contains(hint, "`cd ") || !strings.Contains(hint, "npm install --save-exact --force --no-audit --no-fund @opencode/plugin@2.0.4`") {
+		t.Fatalf("peer-conflict remedy is not a quoted POSIX command: %s", hint)
 	}
 }
 
@@ -204,9 +197,6 @@ func TestV2SDKRefusesBuildMetadataCorruptManifestAndSanitizesVersion(t *testing.
 
 // A symlinked node_modules resolves to the real installed SDK.
 func TestV2SDKAcceptsSymlinkedNodeModules(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture requires POSIX")
-	}
 	home, config := sdkRangeConfig(t, `{"packageManager":"npm@10.8.0"}`, "")
 	real := filepath.Join(t.TempDir(), "node_modules")
 	writeSDKRangeFile(t, filepath.Join(real, "@opencode", "plugin", "package.json"), `{"version":"2.0.22"}`)

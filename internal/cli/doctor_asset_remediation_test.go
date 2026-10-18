@@ -17,11 +17,9 @@ func TestRunDoctor_AssetVersionRemediation(t *testing.T) {
 	t.Setenv(engramHealthEnvVar, "")
 	origExec, origLook := osExecutableDoctor, lookPathFn
 	origHome, origDirs, origAvail := osUserHomeDirDoctor, pathDirsFn, availableBytesFn
-	origGOOS := reviewManagedAssetsGOOS
 	t.Cleanup(func() {
 		osExecutableDoctor, lookPathFn = origExec, origLook
 		osUserHomeDirDoctor, pathDirsFn, availableBytesFn = origHome, origDirs, origAvail
-		reviewManagedAssetsGOOS = origGOOS
 	})
 
 	home := t.TempDir()
@@ -35,8 +33,8 @@ func TestRunDoctor_AssetVersionRemediation(t *testing.T) {
 	availableBytesFn = func(string) (int64, error) { return 1024 * 1024 * 1024, nil }
 
 	simple := filepath.ToSlash(filepath.Join(home, "pinned", "gentle-ai"))
-	// Temp dirs can contain characters outside the bare allowlist (the "~" of
-	// Windows 8.3 names such as RUNNER~1), which the continuation must quote.
+	// Temp dirs can contain characters outside the bare allowlist, which the
+	// continuation must quote.
 	simpleWord := simple
 	if !managedAssetsBareExecutable.MatchString(simple) {
 		simpleWord = "'" + simple + "'"
@@ -45,19 +43,18 @@ func TestRunDoctor_AssetVersionRemediation(t *testing.T) {
 	apostrophe := filepath.Join(home, "user's build", "gentle-ai")
 	other := filepath.Join(home, "homebrew", "gentle-ai")
 	for _, tc := range []struct {
-		name, invoked, pathCopy, goos, want string
-		execErr                             error
-		matching                            bool
+		name, invoked, pathCopy, want string
+		execErr                       error
+		matching                      bool
 	}{
-		{name: "different PATH build", invoked: simple, pathCopy: other, goos: "linux", want: simpleWord + " sync"},
-		{name: "same PATH build", invoked: simple, pathCopy: simple, goos: "linux", want: simpleWord + " sync"},
-		{name: "POSIX spaces", invoked: spaces, pathCopy: other, goos: "linux", want: "'" + spaces + "' sync"},
-		{name: "POSIX apostrophe", invoked: apostrophe, pathCopy: other, goos: "linux", want: "'" + strings.ReplaceAll(apostrophe, "'", `'\''`) + "' sync"},
-		{name: "Windows spaces", invoked: spaces, pathCopy: other, goos: "windows", want: "\"" + spaces + "\" sync"},
-		{name: "lookup failure", pathCopy: other, execErr: errors.New("unavailable"), goos: "linux"},
-		{name: "relative identity", invoked: "gentle-ai", pathCopy: other, goos: "linux"},
-		{name: "multiline identity", invoked: simple + "\nunsafe", pathCopy: other, goos: "linux"},
-		{name: "matching assets", invoked: simple, pathCopy: simple, goos: "linux", matching: true},
+		{name: "different PATH build", invoked: simple, pathCopy: other, want: simpleWord + " sync"},
+		{name: "same PATH build", invoked: simple, pathCopy: simple, want: simpleWord + " sync"},
+		{name: "POSIX spaces", invoked: spaces, pathCopy: other, want: "'" + spaces + "' sync"},
+		{name: "POSIX apostrophe", invoked: apostrophe, pathCopy: other, want: "'" + strings.ReplaceAll(apostrophe, "'", `'\''`) + "' sync"},
+		{name: "lookup failure", pathCopy: other, execErr: errors.New("unavailable")},
+		{name: "relative identity", invoked: "gentle-ai", pathCopy: other},
+		{name: "multiline identity", invoked: simple + "\nunsafe", pathCopy: other},
+		{name: "matching assets", invoked: simple, pathCopy: simple, matching: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			version := "v0.9.0"
@@ -75,7 +72,6 @@ func TestRunDoctor_AssetVersionRemediation(t *testing.T) {
 				}
 				return filepath.Join(home, name), nil
 			}
-			reviewManagedAssetsGOOS = tc.goos
 			var output bytes.Buffer
 			if err := RunDoctor(context.Background(), &output); err != nil {
 				t.Fatalf("RunDoctor: %v", err)

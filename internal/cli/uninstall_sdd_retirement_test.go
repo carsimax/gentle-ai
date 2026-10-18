@@ -3,7 +3,6 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -163,9 +162,6 @@ func TestUninstallRetiresOwnedSDDInventoryForEveryRuntime(t *testing.T) {
 // SDD files behind a symlinked agents, skills, or prompts directory are the
 // user's, so they are kept, reported, and left out of the snapshot.
 func TestUninstallNeverEntersSymlinkedSDDDirectories(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlinks need privileges on Windows")
-	}
 	home := uninstallSDDTestHome(t)
 	outside := t.TempDir()
 	targets := map[string][]byte{

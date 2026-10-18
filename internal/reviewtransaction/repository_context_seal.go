@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"unicode/utf8"
 )
@@ -371,7 +370,7 @@ func publishReviewRepositoryContextKey(dir, path string) error {
 	}
 	stagedPath := staged.Name()
 	defer os.Remove(stagedPath)
-	if err := staged.Chmod(0o600); err != nil && runtime.GOOS != "windows" {
+	if err := staged.Chmod(0o600); err != nil {
 		_ = staged.Close()
 		return err
 	}
@@ -412,5 +411,5 @@ func readReviewRepositoryContextKey(path string) ([]byte, error) {
 
 func reviewRepositoryContextKeyInfoSafe(info fs.FileInfo) bool {
 	return info.Mode()&os.ModeSymlink == 0 && info.Mode().IsRegular() && info.Size() == reviewRepositoryContextKeyBytes &&
-		(runtime.GOOS == "windows" || info.Mode().Perm()&0o077 == 0)
+		info.Mode().Perm()&0o077 == 0
 }

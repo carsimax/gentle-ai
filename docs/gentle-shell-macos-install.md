@@ -1,6 +1,6 @@
 # Gentle Shell on macOS
 
-**Source candidate only, not a release guide.** On an Apple silicon Mac with macOS 14 or newer, `gentle-ai shell install` creates a private Gentle Shell in **Separate** or **Shared** mode: stock Pi 1.0.0, Gentle/native 4.0.0 and Node 24.18.0/npm, all from pinned artifacts. `gentle-ai shell recover` restores Shared preimages. Modes, confirmations and recovery follow the [Linux contract](gentle-shell-linux-install.md); this page lists what differs on macOS. Support is declared only by a passing [native macOS qualification](evidence/shell-macos-install-qualification.md) receipt for the exact candidate.
+**Source candidate only, not a release guide.** On an Apple silicon Mac with macOS 14 or newer, `gentle-ai shell install` creates a private Gentle Shell in **Separate** or **Shared** mode: stock Pi 1.0.0, Gentle/native 4.0.0 and Node 24.18.0/npm, all from pinned artifacts. `gentle-ai shell recover` restores Shared preimages. Support is declared only by a passing native macOS qualification receipt for the exact candidate.
 
 ## Quick path
 
@@ -44,7 +44,7 @@ gentle-ai shell recover TARGET inspect
 gentle-ai shell recover TARGET PRINTED_CONFIRMATION
 ```
 
-Recovery is the Linux contract: it needs intact saved preimages and fresh printed consent, restores the **whole prefix and agent**, moves the current contents to a retained quarantine beside the preimages, and is not uninstall. If a Shared installation fails as uncertain before TARGET exists, use the printed `WORKSPACE/installed` as ROOT. **Recover before deleting TARGET**; see [Undo Shared changes](gentle-shell-linux-install.md#undo-shared-changes) for the full rules. On macOS the restore command runs under the same process-group containment as installation.
+Recovery needs intact saved preimages and fresh printed consent, restores the **whole prefix and agent**, moves the current contents to a retained quarantine beside the preimages, and is not uninstall. If a Shared installation fails as uncertain before TARGET exists, use the printed `WORKSPACE/installed` as ROOT. **Recover before deleting TARGET**. On macOS the restore command runs under the same process-group containment as installation.
 
 ## Containment: what it is and what it is not
 
@@ -93,4 +93,3 @@ Do not reinstall into a damaged target. Keep it, its agent data and evidence; in
 
 Stock Pi's updater is retained. Readback accepts only complete known graphs; unknown versions, bytes or placement fail closed and keep evidence. Package lifecycle scripts stay disabled. Never delete uncertain roots, stages or evidence to retry.
 
-See also: [Gentle Shell on Linux](gentle-shell-linux-install.md) and [Gentle Shell on Windows](gentle-shell-windows-install.md).

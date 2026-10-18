@@ -13,7 +13,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 )
 
-// Platform contracts live in shell_install_platform_{windows,other}.go:
+// Platform contracts live in shell_install_platform_other.go:
 // shellInstallHelp, shellInstallPlatformFlags, shellEntryValues,
 // shellInstallInspected and runShellInstallTUI.
 

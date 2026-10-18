@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -27,10 +26,6 @@ func TestHelperProcessGetwd(t *testing.T) {
 }
 
 func TestExecuteExternalCommandSurvivesDeletedWorkingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows keeps a process current directory open, so the deleted-CWD integration setup is impossible")
-	}
-
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatalf("resolve test binary: %v", err)

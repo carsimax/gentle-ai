@@ -1,5 +1,3 @@
-//go:build darwin
-
 package reviewtransaction
 
 import "golang.org/x/sys/unix"

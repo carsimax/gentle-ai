@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -65,9 +64,6 @@ func TestInjectAntigravityHeldLeaseRefusesWithoutManagedWrites(t *testing.T) {
 }
 
 func TestInjectAntigravityCoordinationLockAliasesShareKey(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires privileges on Windows")
-	}
 	home := t.TempDir()
 	alias := filepath.Join(home, "alias")
 	if err := os.Symlink(home, alias); err != nil {
@@ -85,9 +81,6 @@ func TestInjectAntigravityCoordinationLockAliasesShareKey(t *testing.T) {
 }
 
 func TestAntigravityCoordinationLockResolvesMissingLeafThroughExistingAncestor(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires privileges on Windows")
-	}
 	home := t.TempDir()
 	alias := filepath.Join(home, "alias")
 	if err := os.Symlink(home, alias); err != nil {

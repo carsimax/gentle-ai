@@ -59,11 +59,11 @@ func TestLivingDocsDoNotAdvertiseRetiredTerms(t *testing.T) {
 	}
 }
 
-// livingDocs returns README.md, CONTRIBUTING.md and docs/**/*.md as
+// livingDocs returns README.md and docs/**/*.md as
 // slash-separated repository paths, without the historical trees.
 func livingDocs(t *testing.T, root string) []string {
 	t.Helper()
-	docs := []string{"README.md", "CONTRIBUTING.md"}
+	docs := []string{"README.md"}
 	err := filepath.WalkDir(filepath.Join(root, "docs"), func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err

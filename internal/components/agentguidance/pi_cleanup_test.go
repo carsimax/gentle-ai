@@ -3,7 +3,6 @@ package agentguidance
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/pi"
@@ -55,10 +54,8 @@ func TestRetirePiSystemPromptBlocksPreservesUnpairedMarkerAndMode(t *testing.T) 
 	if got, err := os.ReadFile(path); err != nil || string(got) != "user\r\n\r\ntail" {
 		t.Fatalf("unowned bytes = %q, %v", got, err)
 	}
-	if runtime.GOOS != "windows" {
-		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
-			t.Fatalf("mode = %v, %v; want 0600", info, err)
-		}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %v, %v; want 0600", info, err)
 	}
 	unpaired := "<!-- gentle-ai:persona -->\nunpaired"
 	if err := os.WriteFile(path, []byte(unpaired), 0o600); err != nil {

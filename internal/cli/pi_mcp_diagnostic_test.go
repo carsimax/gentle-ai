@@ -4,12 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 )
 
@@ -106,9 +103,6 @@ func TestRunDoctorPiMCPDiagnosticIsReadOnly(t *testing.T) {
 					t.Fatal(err)
 				}
 				if err := os.Symlink(missing, path); err != nil {
-					if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(1314)) {
-						t.Skip("symlink creation requires Windows privilege")
-					}
 					t.Fatal(err)
 				}
 				_, readErr = os.ReadFile(path)

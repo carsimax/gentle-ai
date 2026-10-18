@@ -1,5 +1,3 @@
-//go:build darwin
-
 package shellinstaller
 
 import (
@@ -215,8 +213,8 @@ func TestDarwinProvisionPinParity(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := files["provision.mjs"]
-	native := `(?m)^    if \(process.platform === 'darwin'\) \{\n      const manifest = '([^'\n]+)';\n      if \(binary.length !== ([0-9]+) \|\| digest\(binary\) !== '([a-f0-9]{64})' \|\| !read\(path.join\(version, 'integrity.json'\)\).equals\(Buffer.from\(manifest\)\)\) reject\('native independent readback'\);\n      return;\n    \}$`
-	platform := `(?m)^  const platform = process.platform === '(darwin)' \? \{ os: '(darwin)', cpu: '(arm64)', libc: (null) \} : \{ os: 'linux', cpu: 'x64', libc: 'glibc' \};$`
+	native := `(?m)^    const manifest = '([^'\n]+)';\n    if \(binary.length !== ([0-9]+) \|\| digest\(binary\) !== '([a-f0-9]{64})' \|\| !read\(path.join\(version, 'integrity.json'\)\).equals\(Buffer.from\(manifest\)\)\) reject\('native independent readback'\);$`
+	platform := `(?m)^  const platform = \{ os: '(darwin)', cpu: '(arm64)', libc: (null) \};$`
 	equal := func(source []byte, pattern string, want ...string) bool {
 		matches := regexp.MustCompile(pattern).FindAllSubmatch(source, 2)
 		if len(matches) != 1 || len(matches[0]) != len(want)+1 {
@@ -234,7 +232,7 @@ func TestDarwinProvisionPinParity(t *testing.T) {
 		want    []string
 	}{
 		"native":   {native, []string{strings.ReplaceAll(userNativeManifest, "\n", `\n`), strconv.FormatInt(userBinarySize, 10), userBinarySHA}},
-		"platform": {platform, []string{"darwin", "darwin", "arm64", "null"}},
+		"platform": {platform, []string{"darwin", "arm64", "null"}},
 	} {
 		if !equal(source, role.pattern, role.want...) {
 			t.Fatalf("%s: live darwin provision role differs from compiled Go authority (or is missing/ambiguous)", name)

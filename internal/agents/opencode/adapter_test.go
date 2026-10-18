@@ -102,38 +102,6 @@ func TestInstallCommand(t *testing.T) {
 			profile: system.PlatformProfile{OS: "darwin", PackageManager: "brew"},
 			want:    [][]string{{"npm", "install", "-g", "@opencode/cli@latest"}},
 		},
-		{
-			name:    "ubuntu resolves npm install",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt"},
-			want:    [][]string{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "arch resolves npm install",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman"},
-			want:    [][]string{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "fedora resolves npm install",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf"},
-			want:    [][]string{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "fedora with writable npm skips sudo",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", NpmWritable: true},
-			want:    [][]string{{"npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			// Issue #2499: the probe (#2493) accepts any Linux package manager
-			// on PATH, so zypper resolves like every other probed manager.
-			name:    "opensuse resolves npm install",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: "opensuse-leap", PackageManager: "zypper"},
-			want:    [][]string{{"sudo", "npm", "install", "-g", "@opencode/cli@latest"}},
-		},
-		{
-			name:    "linux without package manager returns error",
-			profile: system.PlatformProfile{OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: ""},
-			wantErr: true,
-		},
 	}
 
 	for _, tt := range tests {
@@ -158,7 +126,6 @@ func TestConfigPathsRespectXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(t.TempDir(), "xdg")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	a := NewAdapter()
 	wantDir := filepath.Join(xdg, "opencode")
@@ -190,7 +157,6 @@ func TestSettingsPathIgnoresNonRegularJSONC(t *testing.T) {
 	home := t.TempDir()
 	xdg := filepath.Join(t.TempDir(), "xdg")
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	configDir := filepath.Join(xdg, "opencode")
 	if err := os.MkdirAll(filepath.Join(configDir, "opencode.jsonc"), 0o755); err != nil {
@@ -220,7 +186,6 @@ func TestEffectiveCodeGraphWiring(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
 			t.Setenv("XDG_CONFIG_HOME", "")
 			path := filepath.Join(ConfigPath(home), tt.fileName)
 			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -244,7 +209,6 @@ func TestEffectiveCodeGraphWiring(t *testing.T) {
 func TestConfigPathIgnoresRelativeXDGConfigHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join("relative", "config"))
 	want := filepath.Join(home, ".config", "opencode")
 	if got := ConfigPath(home); got != want {

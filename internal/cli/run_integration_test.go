@@ -9,11 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/kimi"
@@ -119,7 +117,6 @@ func TestRunInstallAppliesFilesystemChanges(t *testing.T) {
 func TestRunInstallReturnsStatePersistenceFailure(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	restoreHome := osUserHomeDir
 	restoreCommand := runCommand
 	restoreLookPath := cmdLookPath
@@ -363,9 +360,6 @@ func TestRunInstallEngramForPiTargetsConfiguredAgentDirectory(t *testing.T) {
 	// (osUserHomeDir below only feeds this package's own home resolution,
 	// not pi's os.UserHomeDir() check).
 	t.Setenv("HOME", home)
-	if runtime.GOOS == "windows" {
-		t.Setenv("USERPROFILE", home)
-	}
 	configured := filepath.Join(t.TempDir(), "gentle-shell-home", "agent")
 	t.Setenv("PI_CODING_AGENT_DIR", configured)
 	seedLegacyPiMCPAdapter(t, configured)
@@ -423,9 +417,6 @@ func TestRunInstallEngramForPiTargetsConfiguredAgentDirectory(t *testing.T) {
 // inject HOMEBREW_NO_AUTO_UPDATE/HOMEBREW_NO_INSTALL_CLEANUP for brew calls
 // (see TestExecuteCommandSetsHomebrewNoAutoUpdateEnvForBrewCommands).
 func TestExecuteCommandInheritsPiCodingAgentDirForChildProcesses(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the child-process probe below runs a POSIX sh one-liner")
-	}
 	restoreStreaming := SetCommandOutputStreaming(false)
 	t.Cleanup(restoreStreaming)
 
@@ -697,21 +688,31 @@ func TestInstallPersonaOnlyRollbackRestoresOpenCodeSettingsAfterCleanup(t *testi
 	}
 }
 
-// --- Batch D: Linux profile runtime wiring integration tests ---
+// --- Batch D: non-Homebrew profile runtime wiring integration tests ---
 
-// linuxDetectionResult builds a DetectionResult with a Linux profile for integration tests.
-func linuxDetectionResult(distro, pkgMgr string) system.DetectionResult {
+// nonBrewDetectionResult is a supported macOS profile without Homebrew, which
+// routes Engram through the direct binary download instead of brew. It also
+// hides the standard Homebrew prefixes so a host Homebrew Engram cannot be
+// picked up by the off-PATH fallback.
+func nonBrewDetectionResult(t *testing.T) system.DetectionResult {
+	t.Helper()
+	restoreStat := osStat
+	t.Cleanup(func() { osStat = restoreStat })
+	osStat = func(name string) (os.FileInfo, error) {
+		if strings.HasPrefix(name, "/opt/homebrew/") || strings.HasPrefix(name, "/usr/local/bin/") {
+			return nil, os.ErrNotExist
+		}
+		return restoreStat(name)
+	}
 	return system.DetectionResult{
 		System: system.SystemInfo{
-			OS:        "linux",
-			Arch:      "amd64",
-			Shell:     "/bin/bash",
+			OS:        "darwin",
+			Arch:      "arm64",
+			Shell:     "/bin/zsh",
 			Supported: true,
 			Profile: system.PlatformProfile{
-				OS:             "linux",
-				LinuxDistro:    distro,
-				PackageManager: pkgMgr,
-				Supported:      true,
+				OS:        "darwin",
+				Supported: true,
 			},
 		},
 	}
@@ -738,79 +739,7 @@ func (r *commandRecorder) get() []string {
 	return cp
 }
 
-func TestRunInstallLinuxUbuntuResolvesAptCommands(t *testing.T) {
-	home := t.TempDir()
-	restoreHome := osUserHomeDir
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		osUserHomeDir = restoreHome
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	osUserHomeDir = func() (string, error) { return home, nil }
-	cmdLookPath = missingBinaryLookPath
-	recorder := &commandRecorder{}
-	runCommand = recorder.record
-
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
-	result, err := RunInstall(
-		[]string{"--agent", "opencode", "--component", "permissions"},
-		detection,
-	)
-	if err != nil {
-		t.Fatalf("RunInstall() error = %v", err)
-	}
-
-	if !result.Verify.Ready {
-		t.Fatalf("verification ready = false, report = %#v", result.Verify)
-	}
-
-	// Verify platform decision was resolved from the Linux profile.
-	if result.Resolved.PlatformDecision.OS != "linux" {
-		t.Fatalf("platform decision OS = %q, want linux", result.Resolved.PlatformDecision.OS)
-	}
-	if result.Resolved.PlatformDecision.PackageManager != "apt" {
-		t.Fatalf("platform decision package manager = %q, want apt", result.Resolved.PlatformDecision.PackageManager)
-	}
-}
-
-func TestRunInstallLinuxArchResolvesPacmanCommands(t *testing.T) {
-	home := t.TempDir()
-	restoreHome := osUserHomeDir
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		osUserHomeDir = restoreHome
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	osUserHomeDir = func() (string, error) { return home, nil }
-	cmdLookPath = missingBinaryLookPath
-	recorder := &commandRecorder{}
-	runCommand = recorder.record
-
-	detection := linuxDetectionResult(system.LinuxDistroArch, "pacman")
-	result, err := RunInstall(
-		[]string{"--agent", "opencode", "--component", "permissions"},
-		detection,
-	)
-	if err != nil {
-		t.Fatalf("RunInstall() error = %v", err)
-	}
-
-	if !result.Verify.Ready {
-		t.Fatalf("verification ready = false, report = %#v", result.Verify)
-	}
-
-	if result.Resolved.PlatformDecision.PackageManager != "pacman" {
-		t.Fatalf("platform decision package manager = %q, want pacman", result.Resolved.PlatformDecision.PackageManager)
-	}
-}
-
-func TestRunInstallLinuxUbuntuWithEngramUsesDirectDownload(t *testing.T) {
+func TestRunInstallNonBrewWithEngramUsesDirectDownload(t *testing.T) {
 	home := t.TempDir()
 	restoreHome := osUserHomeDir
 	restoreCommand := runCommand
@@ -833,7 +762,7 @@ func TestRunInstallLinuxUbuntuWithEngramUsesDirectDownload(t *testing.T) {
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall(
 		[]string{"--agent", "opencode", "--component", "engram"},
 		detection,
@@ -846,65 +775,22 @@ func TestRunInstallLinuxUbuntuWithEngramUsesDirectDownload(t *testing.T) {
 		t.Fatalf("verification ready = false, report = %#v", result.Verify)
 	}
 
-	// Must NOT use go install for engram on Linux.
+	// Must NOT use go install for engram.
 	for _, cmd := range recorder.get() {
 		if strings.Contains(cmd, "go install") && strings.Contains(cmd, "engram") {
-			t.Fatalf("Linux engram install should NOT use go install, got command: %s", cmd)
+			t.Fatalf("engram download install should NOT use go install, got command: %s", cmd)
 		}
 	}
 }
 
-func TestRunInstallLinuxArchWithEngramUsesDirectDownload(t *testing.T) {
-	home := t.TempDir()
-	restoreHome := osUserHomeDir
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		osUserHomeDir = restoreHome
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	osUserHomeDir = func() (string, error) { return home, nil }
-	cmdLookPath = missingBinaryLookPath
-	recorder := &commandRecorder{}
-	runCommand = recorder.record
-
-	origDownloadFn := engramDownloadFn
-	engramDownloadFn = func(profile system.PlatformProfile) (string, error) {
-		return "/tmp/fake-engram", nil
-	}
-	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
-
-	detection := linuxDetectionResult(system.LinuxDistroArch, "pacman")
-	result, err := RunInstall(
-		[]string{"--agent", "opencode", "--component", "engram"},
-		detection,
-	)
-	if err != nil {
-		t.Fatalf("RunInstall() error = %v", err)
-	}
-
-	if !result.Verify.Ready {
-		t.Fatalf("verification ready = false, report = %#v", result.Verify)
-	}
-
-	// Must NOT use go install for engram on Arch Linux.
-	for _, cmd := range recorder.get() {
-		if strings.Contains(cmd, "go install") && strings.Contains(cmd, "engram") {
-			t.Fatalf("Arch Linux engram install should NOT use go install, got command: %s", cmd)
-		}
-	}
-}
-
-func TestRunInstallLinuxRollsBackOnComponentFailure(t *testing.T) {
+func TestRunInstallNonBrewRollsBackOnComponentFailure(t *testing.T) {
 	home := t.TempDir()
 	settingsPath := filepath.Join(home, ".config", "opencode", "opencode.json")
 	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 
-	before := []byte("{\n  \"linux-original\": true\n}\n")
+	before := []byte("{\n  \"original\": true\n}\n")
 	if err := os.WriteFile(settingsPath, before, 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -929,7 +815,7 @@ func TestRunInstallLinuxRollsBackOnComponentFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	// Exclude context7 — it has no rollback and taints the settings file.
 	_, err := RunInstall(
 		[]string{"--agent", "opencode", "--component", "engram"},
@@ -950,7 +836,7 @@ func TestRunInstallLinuxRollsBackOnComponentFailure(t *testing.T) {
 	}
 
 	if string(after) != string(before) {
-		t.Fatalf("settings content changed after rollback on Linux\nafter=%s\nbefore=%s", after, before)
+		t.Fatalf("settings content changed after rollback\nafter=%s\nbefore=%s", after, before)
 	}
 }
 
@@ -998,7 +884,7 @@ func TestRunInstallWorkspaceScopeRollback_SurfacesRealError(t *testing.T) {
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	_, err = RunInstall(
 		[]string{"--scope", "workspace", "--agent", "opencode", "--component", "engram"},
 		detection,
@@ -1037,7 +923,7 @@ func TestRunInstallFedoraQwenEngramSkipsUnsupportedSetupAndWritesSettings(t *tes
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroFedora, "dnf")
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall(
 		[]string{"--agent", "qwen-code", "--component", "engram"},
 		detection,
@@ -1061,9 +947,9 @@ func TestRunInstallFedoraQwenEngramSkipsUnsupportedSetupAndWritesSettings(t *tes
 	}
 }
 
-// --- Batch E: Linux verification and macOS parity matrix ---
+// --- Batch E: verification and macOS parity matrix ---
 
-func TestRunInstallLinuxVerificationReportsReadyOnSuccess(t *testing.T) {
+func TestRunInstallNonBrewVerificationReportsReadyOnSuccess(t *testing.T) {
 	home := t.TempDir()
 	restoreHome := osUserHomeDir
 	restoreCommand := runCommand
@@ -1078,7 +964,7 @@ func TestRunInstallLinuxVerificationReportsReadyOnSuccess(t *testing.T) {
 	runCommand = func(string, ...string) error { return nil }
 	cmdLookPath = missingBinaryLookPath
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall(
 		[]string{"--agent", "opencode", "--component", "permissions"},
 		detection,
@@ -1088,44 +974,15 @@ func TestRunInstallLinuxVerificationReportsReadyOnSuccess(t *testing.T) {
 	}
 
 	if !result.Verify.Ready {
-		t.Fatalf("Verify.Ready = false, want true for successful Linux install")
+		t.Fatalf("Verify.Ready = false, want true for successful install")
 	}
 	if result.Verify.Failed != 0 {
 		t.Fatalf("Verify.Failed = %d, want 0", result.Verify.Failed)
 	}
 }
 
-func TestRunInstallLinuxArchVerificationReportsReadyOnSuccess(t *testing.T) {
-	home := t.TempDir()
-	restoreHome := osUserHomeDir
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		osUserHomeDir = restoreHome
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	osUserHomeDir = func() (string, error) { return home, nil }
-	runCommand = func(string, ...string) error { return nil }
-	cmdLookPath = missingBinaryLookPath
-
-	detection := linuxDetectionResult(system.LinuxDistroArch, "pacman")
-	result, err := RunInstall(
-		[]string{"--agent", "opencode", "--component", "permissions"},
-		detection,
-	)
-	if err != nil {
-		t.Fatalf("RunInstall() error = %v", err)
-	}
-
-	if !result.Verify.Ready {
-		t.Fatalf("Verify.Ready = false, want true for successful Arch install")
-	}
-}
-
-func TestRunInstallLinuxDryRunSkipsVerification(t *testing.T) {
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+func TestRunInstallNonBrewDryRunSkipsVerification(t *testing.T) {
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall([]string{"--dry-run"}, detection)
 	if err != nil {
 		t.Fatalf("RunInstall() error = %v", err)
@@ -1140,15 +997,15 @@ func TestRunInstallLinuxDryRunSkipsVerification(t *testing.T) {
 	}
 }
 
-func TestRunInstallLinuxDryRunPlatformDecisionRendersCorrectly(t *testing.T) {
-	detection := linuxDetectionResult(system.LinuxDistroArch, "pacman")
+func TestRunInstallDryRunPlatformDecisionRendersCorrectly(t *testing.T) {
+	detection := macOSDetectionResult()
 	result, err := RunInstall([]string{"--dry-run"}, detection)
 	if err != nil {
 		t.Fatalf("RunInstall() error = %v", err)
 	}
 
 	output := RenderDryRun(result)
-	want := "os=linux distro=arch package-manager=pacman status=supported"
+	want := "os=darwin package-manager=brew status=supported"
 	if !strings.Contains(output, want) {
 		t.Fatalf("RenderDryRun() missing platform decision\noutput=%s\nwant contains=%s", output, want)
 	}
@@ -1739,72 +1596,9 @@ func TestRunInstallGGASkipsInstallWhenAlreadyOnPath(t *testing.T) {
 	}
 }
 
-func TestRunInstallGGALinuxIncludesTempCleanupBeforeClone(t *testing.T) {
-	home := t.TempDir()
-	restoreHome := osUserHomeDir
-	restoreCommand := runCommand
-	restoreLookPath := cmdLookPath
-	t.Cleanup(func() {
-		osUserHomeDir = restoreHome
-		runCommand = restoreCommand
-		cmdLookPath = restoreLookPath
-	})
-
-	osUserHomeDir = func() (string, error) { return home, nil }
-	cmdLookPath = func(name string) (string, error) {
-		if name == "gga" {
-			return "", exec.ErrNotFound
-		}
-		return "/usr/local/bin/" + name, nil
-	}
-	recorder := &commandRecorder{}
-	runCommand = recorder.record
-
-	result, err := RunInstall(
-		[]string{"--agent", "opencode", "--component", "gga"},
-		linuxDetectionResult(system.LinuxDistroUbuntu, "apt"),
-	)
-	if err != nil {
-		t.Fatalf("RunInstall() error = %v", err)
-	}
-	if !result.Verify.Ready {
-		t.Fatalf("verification ready = false")
-	}
-
-	commands := recorder.get()
-	cleanupIdx := -1
-	cloneIdx := -1
-	for i, cmd := range commands {
-		if strings.Contains(cmd, "rm -rf /tmp/gentleman-guardian-angel") {
-			cleanupIdx = i
-		}
-		// Match the clone intent (URL + dest) instead of the full literal command,
-		// so the test stays valid when extra flags like --depth/--branch are added.
-		if strings.Contains(cmd, "git") && strings.Contains(cmd, "https://github.com/Gentleman-Programming/gentleman-guardian-angel.git") && strings.Contains(cmd, "/tmp/gentleman-guardian-angel") {
-			cloneIdx = i
-		}
-	}
-
-	for _, cmd := range commands {
-		if strings.Contains(cmd, "gga install") || strings.Contains(cmd, "gga init") {
-			t.Fatalf("expected global gga provisioning only, got repo-level command: %s", cmd)
-		}
-	}
-
-	if cleanupIdx == -1 {
-		t.Fatalf("expected cleanup command before clone, got commands: %v", commands)
-	}
-	if cloneIdx == -1 {
-		t.Fatalf("expected clone command, got commands: %v", commands)
-	}
-	if cleanupIdx >= cloneIdx {
-		t.Fatalf("cleanup should run before clone (cleanup=%d clone=%d)", cleanupIdx, cloneIdx)
-	}
-}
-
-// TestRunInstallEngramLinuxUsesDirectDownloadNoGoRequired verifies that on Linux,
-// engram is now installed via pre-built binary download — Go is NOT required.
-func TestRunInstallEngramLinuxUsesDirectDownloadNoGoRequired(t *testing.T) {
+// TestRunInstallEngramNonBrewUsesDirectDownloadNoGoRequired verifies that
+// without Homebrew, engram is now installed via pre-built binary download — Go is NOT required.
+func TestRunInstallEngramNonBrewUsesDirectDownloadNoGoRequired(t *testing.T) {
 	home := t.TempDir()
 	restoreHome := osUserHomeDir
 	restoreCommand := runCommand
@@ -1830,7 +1624,7 @@ func TestRunInstallEngramLinuxUsesDirectDownloadNoGoRequired(t *testing.T) {
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall(
 		[]string{"--agent", "opencode", "--component", "engram"},
 		detection,
@@ -1854,9 +1648,9 @@ func TestRunInstallEngramLinuxUsesDirectDownloadNoGoRequired(t *testing.T) {
 	}
 }
 
-// TestRunInstallEngramLinuxNeverInstallsGo verifies that even if Go is present,
+// TestRunInstallEngramNonBrewNeverInstallsGo verifies that even if Go is present,
 // we never install Go as a prerequisite for engram (direct download path).
-func TestRunInstallEngramLinuxNeverInstallsGo(t *testing.T) {
+func TestRunInstallEngramNonBrewNeverInstallsGo(t *testing.T) {
 	home := t.TempDir()
 	restoreHome := osUserHomeDir
 	restoreCommand := runCommand
@@ -1878,7 +1672,7 @@ func TestRunInstallEngramLinuxNeverInstallsGo(t *testing.T) {
 	}
 	t.Cleanup(func() { engramDownloadFn = origDownloadFn })
 
-	detection := linuxDetectionResult(system.LinuxDistroUbuntu, "apt")
+	detection := nonBrewDetectionResult(t)
 	result, err := RunInstall(
 		[]string{"--agent", "opencode", "--component", "engram"},
 		detection,
@@ -2083,63 +1877,6 @@ func TestRunInstallDryRunMatchesActualInstallOpenCodeReview(t *testing.T) {
 		}
 	}
 }
-
-func TestEnsureGoAvailableAfterInstallWindowsRefreshesPath(t *testing.T) {
-	restoreLookPath := cmdLookPath
-	restoreStat := osStat
-	restoreSetenv := osSetenv
-	oldPath := os.Getenv("PATH")
-	oldProgramFiles := os.Getenv("ProgramFiles")
-	t.Cleanup(func() {
-		cmdLookPath = restoreLookPath
-		osStat = restoreStat
-		osSetenv = restoreSetenv
-		_ = os.Setenv("PATH", oldPath)
-		_ = os.Setenv("ProgramFiles", oldProgramFiles)
-	})
-
-	programFiles := `C:\Program Files`
-	if err := os.Setenv("ProgramFiles", programFiles); err != nil {
-		t.Fatalf("Setenv(ProgramFiles) error = %v", err)
-	}
-	if err := os.Setenv("PATH", `C:\Windows\System32`); err != nil {
-		t.Fatalf("Setenv(PATH) error = %v", err)
-	}
-
-	cmdLookPath = func(name string) (string, error) {
-		if name == "go" {
-			return "", exec.ErrNotFound
-		}
-		return name, nil
-	}
-	osStat = func(name string) (os.FileInfo, error) {
-		want := filepath.Join(programFiles, "Go", "bin", "go.exe")
-		if name == want {
-			return fakeFileInfo{name: "go.exe"}, nil
-		}
-		return nil, os.ErrNotExist
-	}
-	osSetenv = os.Setenv
-
-	if err := ensureGoAvailableAfterInstall(system.PlatformProfile{OS: "windows", PackageManager: "winget"}); err != nil {
-		t.Fatalf("ensureGoAvailableAfterInstall() error = %v", err)
-	}
-
-	updatedPath := os.Getenv("PATH")
-	expectedPrefix := filepath.Join(programFiles, "Go", "bin") + string(os.PathListSeparator)
-	if !strings.HasPrefix(updatedPath, expectedPrefix) {
-		t.Fatalf("PATH = %q, want prefix %q", updatedPath, expectedPrefix)
-	}
-}
-
-type fakeFileInfo struct{ name string }
-
-func (f fakeFileInfo) Name() string     { return f.name }
-func (fakeFileInfo) Size() int64        { return 0 }
-func (fakeFileInfo) Mode() os.FileMode  { return 0 }
-func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
-func (fakeFileInfo) IsDir() bool        { return false }
-func (fakeFileInfo) Sys() any           { return nil }
 
 // TestRunInstallUpgradeIdempotency verifies that running install twice with the
 // same configuration does NOT duplicate any content.  The second run must be a

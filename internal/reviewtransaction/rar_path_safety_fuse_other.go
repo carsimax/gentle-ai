@@ -1,5 +1,3 @@
-//go:build !windows && !linux
-
 package reviewtransaction
 
 // posixFUSEProjectedOwnership is the non-Linux POSIX default: #2838's

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -53,9 +52,6 @@ func TestPiExternalDirectoryRollback(t *testing.T) {
 		t.Run(fmt.Sprint(attack), func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			if runtime.GOOS == "windows" {
-				t.Setenv("USERPROFILE", home)
-			}
 			parent := t.TempDir()
 			agentDir := filepath.Join(parent, "agent")
 			t.Setenv("PI_CODING_AGENT_DIR", agentDir)

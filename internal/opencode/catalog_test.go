@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -345,9 +344,6 @@ func TestDiscoverCatalogRejectsInvalidOutput(t *testing.T) {
 // contract: once the drained stream is exhausted, Read must reap the child
 // and return its exit error, never swallow it as a plain io.EOF.
 func TestProcessStreamReaderReadSurfacesExitStatusAfterEOF(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("requires a POSIX exit-status fixture")
-	}
 	// Force a child with a non-zero exit status through sh.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -384,9 +380,6 @@ func TestProcessStreamReaderReadSurfacesExitStatusAfterEOF(t *testing.T) {
 func TestRunCatalogCommandCancelsOverflowingChild(t *testing.T) {
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "catalog-helper")
-	if runtime.GOOS == "windows" {
-		helper += ".exe"
-	}
 	source := filepath.Join(dir, "main.go")
 	if err := os.WriteFile(source, []byte("package main\nimport (\"fmt\"; \"strings\")\nfunc main() { for { fmt.Println(strings.Repeat(\"x\", 1024)) } }\n"), 0o600); err != nil {
 		t.Fatalf("write helper: %v", err)
@@ -646,9 +639,6 @@ func (e *exitOnCloseReader) WaitError() error           { return e.waitErr }
 // by a downstream parse classification. Only a genuine output overflow keeps
 // its own category, matching the pre-streaming cmd.Run() behavior.
 func TestDiscoverCatalogPrefersCommandFailureOverParseClassification(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("requires a POSIX exit-status fixture")
-	}
 	fixture := exec.Command("sh", "-c", "exit 7")
 	if err := fixture.Run(); err == nil {
 		t.Fatal("expected fixture command to exit non-zero")
@@ -683,9 +673,6 @@ func TestDiscoverCatalogPrefersCommandFailureOverParseClassification(t *testing.
 // inherits stdout and stderr must not extend discovery past the context
 // deadline.
 func TestRunCatalogCommandDeadlineNotBlockedByInheritingDescendant(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("requires a POSIX sleep descendant to inherit the pipes")
-	}
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "descendant-helper")
 	source := filepath.Join(dir, "main.go")
@@ -737,9 +724,6 @@ func main() {
 // within the context deadline instead of blocking indefinitely on the escaped
 // descendant's open pipe.
 func TestRunCatalogCommandDeadlineNotBlockedByEscapedDescendant(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("requires POSIX process groups to test escaping the group")
-	}
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "escaped-descendant-helper")
 	source := filepath.Join(dir, "main.go")
@@ -823,9 +807,6 @@ func TestBoundedPipeBufferPreservesNonEOFReadFailure(t *testing.T) {
 func TestProcessStreamReaderWaitErrorJoinsStdoutDrain(t *testing.T) {
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "earlyfail-helper")
-	if runtime.GOOS == "windows" {
-		helper += ".exe"
-	}
 	source := filepath.Join(dir, "main.go")
 	src := `package main
 
@@ -902,9 +883,6 @@ func (s *slowReader) Read(p []byte) (int, error) {
 func TestDiscoverCatalogSurvivesSlowConsumer(t *testing.T) {
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "slow-consumer-helper")
-	if runtime.GOOS == "windows" {
-		helper += ".exe"
-	}
 	source := filepath.Join(dir, "main.go")
 	src := `package main
 
@@ -977,9 +955,6 @@ func TestDiscoverCatalogLegacyVsNew(t *testing.T) {
 func TestStderrPressure_NoDeadlock(t *testing.T) {
 	dir := t.TempDir()
 	helper := filepath.Join(dir, "stderr-helper")
-	if runtime.GOOS == "windows" {
-		helper += ".exe"
-	}
 	source := filepath.Join(dir, "main.go")
 	src := `package main
 import (

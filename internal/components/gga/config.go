@@ -2,9 +2,7 @@ package gga
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
@@ -12,28 +10,9 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 )
 
-// ggaConfigDir returns the platform-appropriate directory that GGA reads its
-// global config from.
-//
-// On Windows, GGA reads from %APPDATA%\gga (i.e. AppData\Roaming\gga).
-// On Linux and macOS, GGA follows the XDG convention and reads from
-// ~/.config/gga.
-//
-// gentle-ai must write to the same location that GGA reads from; using
-// %USERPROFILE%\.config on Windows is incorrect and results in `gga config`
-// reporting no provider even when the config file was generated.
-//
-// goos is injected so unit tests can override runtime.GOOS without build tags.
-func ggaConfigDir(homeDir string, goos string) string {
-	if goos == "windows" {
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			// Fallback: APPDATA should always be set on Windows, but guard
-			// defensively so we never produce an empty path.
-			appData = filepath.Join(homeDir, "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "gga")
-	}
+// ggaConfigDir returns the directory that GGA reads its global config from:
+// GGA follows the XDG convention and reads from ~/.config/gga.
+func ggaConfigDir(homeDir string) string {
 	return filepath.Join(homeDir, ".config", "gga")
 }
 
@@ -119,12 +98,12 @@ func BuildConfig(provider string) []byte {
 
 // ConfigPath returns the GGA global config file path.
 func ConfigPath(homeDir string) string {
-	return filepath.Join(ggaConfigDir(homeDir, runtime.GOOS), "config")
+	return filepath.Join(ggaConfigDir(homeDir), "config")
 }
 
 // AgentsTemplatePath returns the starter AGENTS.md template path.
 func AgentsTemplatePath(homeDir string) string {
-	return filepath.Join(ggaConfigDir(homeDir, runtime.GOOS), "AGENTS.md")
+	return filepath.Join(ggaConfigDir(homeDir), "AGENTS.md")
 }
 
 // Inject writes the GGA global config and starter AGENTS.md template.

@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/capabilitymanifest"
@@ -95,14 +94,8 @@ func (a *Adapter) findKimi() (string, error) {
 	}
 
 	fallbacks := []string{
-		filepath.Join(home, ".local", "bin", binaryName()),
-		filepath.Join(home, "bin", binaryName()),
-	}
-	if runtime.GOOS == "windows" {
-		fallbacks = append(fallbacks,
-			filepath.Join(home, "AppData", "Local", "Microsoft", "WinGet", "Links", "kimi.exe"),
-			filepath.Join(home, "AppData", "Roaming", "uv", "bin", "kimi.exe"),
-		)
+		filepath.Join(home, ".local", "bin", "kimi"),
+		filepath.Join(home, "bin", "kimi"),
 	}
 
 	for _, fb := range fallbacks {
@@ -327,13 +320,6 @@ func defaultStat(path string) statResult {
 func defaultPathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-func binaryName() string {
-	if runtime.GOOS == "windows" {
-		return "kimi.exe"
-	}
-	return "kimi"
 }
 
 var kimiIncludePattern = regexp.MustCompile(`(?m)^\s*\{%\s*include\s+"([^"]+)"\s+ignore\s+missing\s*%\}\s*$`)

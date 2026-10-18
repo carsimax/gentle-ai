@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -521,18 +520,15 @@ func TestPiCodeGraphPathsExcludesUnsafeManifestPaths(t *testing.T) {
 func TestPiCodeGraphManifestPermissionsSafe(t *testing.T) {
 	for _, tt := range []struct {
 		name string
-		goos string
 		mode os.FileMode
 		want bool
 	}{
-		{name: "Windows normal file", goos: "windows", mode: 0o666, want: true},
-		{name: "Windows read-only file", goos: "windows", mode: 0o444, want: true},
-		{name: "POSIX private file", goos: "linux", mode: 0o600, want: true},
-		{name: "POSIX group-readable file", goos: "linux", mode: 0o644, want: false},
+		{name: "private file", mode: 0o600, want: true},
+		{name: "group-readable file", mode: 0o644, want: false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := piCodeGraphManifestPermissionsSafe(tt.goos, tt.mode); got != tt.want {
-				t.Fatalf("piCodeGraphManifestPermissionsSafe(%q, %o) = %v, want %v", tt.goos, tt.mode, got, tt.want)
+			if got := piCodeGraphManifestPermissionsSafe(tt.mode); got != tt.want {
+				t.Fatalf("piCodeGraphManifestPermissionsSafe(%o) = %v, want %v", tt.mode, got, tt.want)
 			}
 		})
 	}
@@ -983,12 +979,7 @@ func TestPiCodeGraphProbeRejectsInvalidInitializeResponses(t *testing.T) {
 	for _, response := range responses {
 		t.Run(response, func(t *testing.T) {
 			home := t.TempDir()
-			if runtime.GOOS == "windows" {
-				t.Setenv("GENTLE_AI_CODEGRAPH_TEST_RESPONSE", response)
-				installFakeCodeGraphHelper(t, "invalid-response")
-			} else {
-				installFakeCodeGraphScript(t, `while IFS= read -r request; do printf '%s\n' '`+response+`'; done`)
-			}
+			installFakeCodeGraphScript(t, `while IFS= read -r request; do printf '%s\n' '`+response+`'; done`)
 
 			_, err := probePiCodeGraphMCP(filepath.Join(home, "mcp.json"))
 			if err == nil || !strings.Contains(err.Error(), "invalid JSON-RPC 2.0 result") {
@@ -1013,9 +1004,6 @@ func TestPiCodeGraphRejectsMalformedMCPServersWithoutChangingBytes(t *testing.T)
 }
 
 func TestPiCodeGraphPreservesSensitiveFileModes(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("exact POSIX file modes are unavailable on Windows")
-	}
 	home := t.TempDir()
 	mcpPath := filepath.Join(home, ".pi", "agent", "mcp.json")
 	childPath := filepath.Join(home, ".pi", "agent", "subagents", "worker.md")
@@ -1162,34 +1150,12 @@ func mustReadPiFile(t *testing.T, path string) []byte {
 
 func installFakeCodeGraph(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		installFakeCodeGraphHelper(t, "normal")
-		return
-	}
 	installFakeCodeGraphScript(t, `while IFS= read -r request; do
   case "$request" in
     *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"fake","version":"1"}}}' ;;
     *'"id":2'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"codegraph_explore","inputSchema":{"type":"object","properties":{"query":{"type":"string"},"maxFiles":{"type":"integer"},"projectPath":{"type":"string"}},"required":["query"]}}]}}' ;;
   esac
 done`)
-}
-
-func installFakeCodeGraphHelper(t *testing.T, mode string) {
-	t.Helper()
-	binDir := t.TempDir()
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(executable)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(binDir, "codegraph.exe"), data, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GENTLE_AI_CODEGRAPH_TEST_HELPER", mode)
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 func installFakeCodeGraphScript(t *testing.T, body string) {
@@ -1210,9 +1176,6 @@ func TestCodeGraphIsolatedManifestWithConfiguredAgentDir(t *testing.T) {
 	// PI_CODING_AGENT_DIR override for the process's actual home directory,
 	// so this test must make home look real for the duration of the test.
 	t.Setenv("HOME", home)
-	if runtime.GOOS == "windows" {
-		t.Setenv("USERPROFILE", home)
-	}
 
 	// 1. Initial run under standard Pi config creates a manifest with an owned child.
 	defaultPaths := piagent.CodeGraphPaths(home)

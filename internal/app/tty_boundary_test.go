@@ -81,7 +81,7 @@ func TestRunArgsNoArgumentRequiresInteractiveStdinAndStdout(t *testing.T) {
 				return system.DetectionResult{
 					System: system.SystemInfo{
 						Supported: true,
-						Profile:   system.PlatformProfile{OS: "linux", Supported: true},
+						Profile:   system.PlatformProfile{OS: "darwin", Supported: true},
 					},
 				}, nil
 			}
@@ -150,7 +150,7 @@ func TestRunArgsNoArgumentAllowsInteractiveStdinAndStdout(t *testing.T) {
 		return system.DetectionResult{
 			System: system.SystemInfo{
 				Supported: true,
-				Profile:   system.PlatformProfile{OS: "linux", Supported: true},
+				Profile:   system.PlatformProfile{OS: "darwin", Supported: true},
 			},
 		}, nil
 	}
@@ -224,9 +224,6 @@ func TestRunArgsExplicitCommandsBypassTTYBoundary(t *testing.T) {
 func TestBuiltBinaryClosedStdinRefusesBeforeBubbleTea(t *testing.T) {
 	if testing.Short() {
 		t.Skip("built-binary process coverage is not run in short mode")
-	}
-	if runtime.GOOS == "windows" {
-		t.Skip("closed-stdin process coverage is compile-only on Windows")
 	}
 
 	_, sourceFile, _, ok := runtime.Caller(0)

@@ -234,7 +234,6 @@ func telemetryTestHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	// Never let a test spawn a real telemetry sender or reach the network:
 	// the CLI-level tests exercise decision-making and output shape, which
 	// works identically whether or not a send would actually be attempted.

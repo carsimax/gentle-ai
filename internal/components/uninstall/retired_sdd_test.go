@@ -3,7 +3,6 @@ package uninstall
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 
@@ -43,8 +42,8 @@ func TestPartialComponentUninstallLeavesRetiredSDDFiles(t *testing.T) {
 // A retirement that fails keeps the runtime in state.json, names it in the
 // manual actions, and still reports what it already removed.
 func TestRetiredSDDFailureKeepsRuntimeInState(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("needs POSIX directory permissions enforced")
+	if os.Geteuid() == 0 {
+		t.Skip("needs directory permissions enforced")
 	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)

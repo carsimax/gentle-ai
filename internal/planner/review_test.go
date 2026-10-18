@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,9 +20,8 @@ func TestBuildReviewPayloadIncludesPlatformDecision(t *testing.T) {
 		Agents:            []model.AgentID{model.AgentClaudeCode},
 		OrderedComponents: []model.ComponentID{model.ComponentEngram},
 		PlatformDecision: PlatformDecision{
-			OS:             "linux",
-			LinuxDistro:    "arch",
-			PackageManager: "pacman",
+			OS:             "darwin",
+			PackageManager: "brew",
 			Supported:      true,
 		},
 	}
@@ -50,33 +50,6 @@ func TestPlatformDecisionFromProfileMatrix(t *testing.T) {
 				OS: "darwin", PackageManager: "brew", Supported: true,
 			},
 		},
-		{
-			name: "ubuntu profile maps to apt decision",
-			profile: system.PlatformProfile{
-				OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", Supported: true,
-			},
-			want: PlatformDecision{
-				OS: "linux", LinuxDistro: system.LinuxDistroUbuntu, PackageManager: "apt", Supported: true,
-			},
-		},
-		{
-			name: "arch profile maps to pacman decision",
-			profile: system.PlatformProfile{
-				OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman", Supported: true,
-			},
-			want: PlatformDecision{
-				OS: "linux", LinuxDistro: system.LinuxDistroArch, PackageManager: "pacman", Supported: true,
-			},
-		},
-		{
-			name: "fedora profile maps to dnf decision",
-			profile: system.PlatformProfile{
-				OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true,
-			},
-			want: PlatformDecision{
-				OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true,
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -92,13 +65,11 @@ func TestPlatformDecisionFromProfileMatrix(t *testing.T) {
 func TestBuildReviewPayloadPlatformDecisionPropagatesPerProfile(t *testing.T) {
 	profiles := []PlatformDecision{
 		{OS: "darwin", PackageManager: "brew", Supported: true},
-		{OS: "linux", LinuxDistro: "ubuntu", PackageManager: "apt", Supported: true},
-		{OS: "linux", LinuxDistro: "arch", PackageManager: "pacman", Supported: true},
-		{OS: "linux", LinuxDistro: system.LinuxDistroFedora, PackageManager: "dnf", Supported: true},
+		{OS: "darwin", PackageManager: "brew", Supported: false},
 	}
 
 	for _, decision := range profiles {
-		t.Run(decision.OS+"/"+decision.LinuxDistro, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%t", decision.OS, decision.Supported), func(t *testing.T) {
 			selection := model.Selection{
 				Persona: model.PersonaGentleman,
 				Preset:  model.PresetFullGentleman,

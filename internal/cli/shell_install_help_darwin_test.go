@@ -1,5 +1,3 @@
-//go:build darwin
-
 package cli
 
 import (
@@ -39,7 +37,7 @@ func TestShellInstallHelpDisclosesMacOSContract(t *testing.T) {
 			"counts every process of your user",
 			"Installer writes use F_FULLFSYNC and refuse filesystems without it;",
 			"the Node helper falls back to a weaker fsync there.",
-			"channel selection is Windows-only",
+			"channel selection is not supported on macOS",
 		} {
 			if !strings.Contains(help, expected) {
 				t.Fatalf("help %q hides %q: %s", args, expected, help)

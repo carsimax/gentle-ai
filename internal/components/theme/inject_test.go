@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -146,9 +145,6 @@ func TestInjectLeavesNonJSONNativeSettingsUntouched(t *testing.T) {
 				t.Fatalf("native settings = %q, %v; want bytes preserved", got, err)
 			}
 			wantMode := os.FileMode(0o600)
-			if runtime.GOOS == "windows" {
-				wantMode = 0o666 // Windows reports only the read-only attribute.
-			}
 			if info, err := os.Stat(settingsPath); err != nil || info.Mode().Perm() != wantMode {
 				t.Fatalf("native settings mode = %v, %v; want %v", info, err, wantMode)
 			}
@@ -190,11 +186,9 @@ func TestInjectAtPathPreservesSelectedJSONCAndLeavesDecoy(t *testing.T) {
 	if err != nil || second.Changed {
 		t.Fatalf("second injection = %#v, %v", second, err)
 	}
-	if runtime.GOOS != "windows" {
-		info, err := os.Stat(selected)
-		if err != nil || info.Mode().Perm() != 0o600 {
-			t.Fatalf("selected JSONC mode = %v, %v; want 0600", info, err)
-		}
+	info, err := os.Stat(selected)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("selected JSONC mode = %v, %v; want 0600", info, err)
 	}
 	got, err := os.ReadFile(selected)
 	if err != nil || !bytes.Contains(got, []byte(`"theme":"gentleman"`)) || !bytes.Contains(got, []byte(`"custom":true`)) || !bytes.Contains(got, []byte("// selected")) {
@@ -207,9 +201,6 @@ func TestInjectAtPathPreservesSelectedJSONCAndLeavesDecoy(t *testing.T) {
 }
 
 func TestInjectAtPathRejectsZeroPermissionSettingsWithoutChangingThem(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file permission bits are not supported on Windows")
-	}
 
 	path := filepath.Join(t.TempDir(), "opencode.jsonc")
 	before := []byte("// private settings\n{\"theme\":\"old\"}\n")
@@ -270,7 +261,7 @@ func TestInjectAtPathRefusesSymlinkWithoutChangingLinkOrTarget(t *testing.T) {
 	if err != nil || !bytes.Equal(got, before) {
 		t.Fatalf("target bytes = %q, %v; want %q", got, err, before)
 	}
-	if info, err := os.Stat(target); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
+	if info, err := os.Stat(target); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("target mode changed: %v, %v", info, err)
 	}
 }
@@ -411,7 +402,6 @@ const (
 func TestInjectVisualThemesWritesExpectedAssets(t *testing.T) {
 	home, xdg := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 	for _, adapter := range []agents.Adapter{claudeAdapter(), opencodeAdapter()} {
 		settings := adapter.SettingsPath(home)

@@ -21,7 +21,6 @@ func piInstallTestHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("PI_CODING_AGENT_DIR", "")
 	return home
 }

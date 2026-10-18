@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
 )
 
@@ -329,9 +328,6 @@ func TestResolveEffectiveConfigUsesOpenCodeConfigDir(t *testing.T) {
 func TestRuntimeConfigPreservesWriteAuthorityAndLayeredReads(t *testing.T) {
 	home, project, override := t.TempDir(), t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
-	// os.UserHomeDir (used by ResolveEffectiveConfig) reads USERPROFILE on
-	// Windows, not HOME, so both must point at the fixture home directory.
-	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("OPENCODE_CONFIG_DIR", override)
 	global := DefaultSettingsPathForHome(home)
@@ -546,9 +542,6 @@ func TestValidateSettingsForWritersRefusesUnsafeOpenCodeSettings(t *testing.T) {
 	})
 
 	t.Run("locked settings path", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("mode 0 only sets the read-only attribute on Windows")
-		}
 		settingsPath := filepath.Join(t.TempDir(), "opencode.jsonc")
 		if err := os.WriteFile(settingsPath, []byte(`{"agent":{}}`), 0o000); err != nil {
 			t.Fatal(err)

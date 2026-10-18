@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -52,7 +51,7 @@ func TestLegacyUninstallOwnership(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+			if info.Mode().Perm() != 0600 {
 				t.Fatalf("settings permissions changed: %v", info.Mode().Perm())
 			}
 			_, err = os.Stat(ownerPath)
@@ -205,9 +204,6 @@ func TestApplyShareDefault(t *testing.T) {
 }
 
 func TestApplyShareDefaultPreservesPrivateMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits are not meaningful on Windows")
-	}
 	settings := filepath.Join(t.TempDir(), "opencode.json")
 	if err := os.WriteFile(settings, []byte(`{"provider":{"example":{"options":{"apiKey":"secret"}}}}`), 0o600); err != nil {
 		t.Fatal(err)

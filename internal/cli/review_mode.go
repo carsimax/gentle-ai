@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -251,12 +250,6 @@ type reviewModeUnsafePathError struct {
 func (err *reviewModeUnsafePathError) Unwrap() error { return err.Cause }
 
 func (err *reviewModeUnsafePathError) Error() string {
-	if runtime.GOOS == "windows" {
-		return fmt.Sprintf(
-			"the clone-local review mode path %s is unsafe; run `%s` in a NON-ELEVATED Windows PowerShell 5.1 shell because an elevated TokenOwner can differ from the current user, then rerun the original command",
-			pathquote.Quote(err.Path), err.repairCommand(),
-		)
-	}
 	return fmt.Sprintf(
 		"the clone-local review mode path %s is unsafe; run `%s`, then rerun the original command",
 		pathquote.Quote(err.Path), err.repairCommand(),
@@ -264,35 +257,11 @@ func (err *reviewModeUnsafePathError) Error() string {
 }
 
 func (err *reviewModeUnsafePathError) repairCommand() string {
-	if runtime.GOOS != "windows" {
-		mode := "600"
-		if err.Directory {
-			mode = "700"
-		}
-		return "chmod " + mode + " " + quotePOSIXShellToken(err.Path)
-	}
-	securityType := "FileSecurity"
-	inheritance := "'None'"
-	setAccessControl := "[System.IO.File]::SetAccessControl($p, $acl)"
+	mode := "600"
 	if err.Directory {
-		securityType = "DirectorySecurity"
-		inheritance = "'ContainerInherit, ObjectInherit'"
-		setAccessControl = "[System.IO.Directory]::SetAccessControl($p, $acl)"
+		mode = "700"
 	}
-	return strings.Join([]string{
-		"$p = " + quotePowerShellLiteral(err.Path),
-		"$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User",
-		"$acl = New-Object System.Security.AccessControl." + securityType,
-		"$acl.SetOwner($sid)",
-		"$acl.SetAccessRuleProtection($true, $false)",
-		"$rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList @($sid, 'FullControl', " + inheritance + ", 'None', 'Allow')",
-		"$acl.SetAccessRule($rule)",
-		setAccessControl,
-	}, "; ")
-}
-
-func quotePowerShellLiteral(path string) string {
-	return "'" + strings.ReplaceAll(path, "'", "''") + "'"
+	return "chmod " + mode + " " + quotePOSIXShellToken(err.Path)
 }
 
 func quotePOSIXShellToken(path string) string {
@@ -316,36 +285,10 @@ func (err *reviewModePrivateModeIneffectiveError) Unwrap() error { return err.Ca
 func (err *reviewModePrivateModeIneffectiveError) Error() string {
 	return fmt.Sprintf(
 		"the clone-local review mode path %s cannot be made private: the filesystem hosting it does not "+
-			"persist POSIX permission modes (WSL DrvFS without the metadata option, exFAT, and SMB without "+
-			"POSIX extensions all behave this way), so chmod cannot repair it; remount the drive with POSIX "+
-			"metadata enabled or move the repository to a filesystem that does, then rerun the original command",
+			"persist POSIX permission modes (exFAT and SMB without POSIX extensions both behave this way), "+
+			"so chmod cannot repair it; remount the drive with POSIX metadata enabled or move the repository to a filesystem that does, then rerun the original command",
 		pathquote.Quote(err.Path),
 	)
-}
-
-// reviewModeUnsupportedFilesystemError is the #4670 refusal for a Git common
-// directory on a filesystem that cannot keep review authority private, an
-// SMB/UNC share being the reported instance. Like the #5112 refusal above, it
-// replaces a repair the operator cannot perform -- the path is already
-// correct, the volume is not -- with the continuations that change the
-// outcome. It wraps the typed cause, so the fail-closed decision is untouched.
-type reviewModeUnsupportedFilesystemError struct {
-	Refusal *reviewtransaction.UnsupportedAuthorityFilesystemError
-	Cause   error
-}
-
-func (err *reviewModeUnsupportedFilesystemError) Unwrap() error { return err.Cause }
-
-func (err *reviewModeUnsupportedFilesystemError) Error() string {
-	return "the clone-local review mode is unavailable: " + err.Refusal.Error()
-}
-
-func reviewModeUnsupportedFilesystemRefusal(err error) error {
-	var unsupported *reviewtransaction.UnsupportedAuthorityFilesystemError
-	if !errors.As(err, &unsupported) {
-		return nil
-	}
-	return &reviewModeUnsupportedFilesystemError{Refusal: unsupported, Cause: err}
 }
 
 func reviewModeUnsafePathRefusal(err error) error {
@@ -400,9 +343,6 @@ func reviewModeUnreadable(
 ) error {
 	if err == nil {
 		return nil
-	}
-	if unsupported := reviewModeUnsupportedFilesystemRefusal(err); unsupported != nil {
-		return unsupported
 	}
 	if unsafePath := reviewModeUnsafePathRefusal(err); unsafePath != nil {
 		return unsafePath

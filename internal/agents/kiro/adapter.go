@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/capabilitymanifest"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
@@ -46,8 +45,7 @@ func (a *Adapter) Detect(_ context.Context, homeDir string) (bool, string, strin
 	//      show the managed directory and configFound reflects filesystem reality.
 	//
 	// Note: configPath is ~/.kiro (the home-based root where all managed
-	// artifacts live), NOT GlobalConfigDir() which points to the OS app-config
-	// dir (%APPDATA%\kiro\User on Windows) used only for settings.json.
+	// artifacts live), NOT the OS app-config dir used only for settings.json.
 	configPath := filepath.Join(homeDir, ".kiro")
 	info, statErr := a.statPath(configPath)
 	configFound := statErr == nil && info.IsDir()
@@ -77,9 +75,7 @@ func (a *Adapter) InstallCommand(_ system.PlatformProfile) ([][]string, error) {
 // --- Config paths ---
 // Kiro IDE (VS Code fork) uses a split-root layout:
 //   - Steering/skills/agents/MCP: ~/.kiro/ (home-based, all platforms)
-//   - Settings:  macOS: ~/Library/Application Support/Kiro/User/
-//               Linux: ~/.config/kiro/user/ (respects XDG_CONFIG_HOME)
-//               Windows: %APPDATA%/kiro/User/
+//   - Settings:  ~/Library/Application Support/Kiro/User/
 // Steering content is written to ~/.kiro/steering/gentle-ai.md via StrategySteeringFile.
 
 func (a *Adapter) GlobalConfigDir(homeDir string) string {
@@ -95,12 +91,9 @@ func (a *Adapter) SystemPromptFile(homeDir string) string {
 }
 
 func (a *Adapter) SkillsDir(homeDir string) string {
-	// Skills are always stored in ~/.kiro/skills/ on all platforms.
-	// This is intentionally independent from GlobalConfigDir() — Kiro uses a split-root
-	// layout where settings live in the OS app-config dir (e.g. %APPDATA%\kiro\User on
-	// Windows) but the IDE reads skills, steering, agents, and MCP from the home-based
-	// ~/.kiro/ root. Using GlobalConfigDir() here would make skills invisible in the IDE
-	// on Windows.
+	// Skills are always stored in ~/.kiro/skills/. Kiro uses a split-root layout
+	// where settings live in the OS app-config dir but the IDE reads skills,
+	// steering, agents, and MCP from the home-based ~/.kiro/ root.
 	return filepath.Join(homeDir, ".kiro", "skills")
 }
 
@@ -145,31 +138,13 @@ func (a *Adapter) MCPStrategy() model.MCPStrategy {
 // MCPConfigPath returns the user-level MCP config file.
 // Kiro reads MCP configuration from ~/.kiro/settings/mcp.json (user level)
 // or .kiro/settings/mcp.json (workspace level). This is separate from the
-// app config dir (%APPDATA%/kiro/User on Windows) used for settings and prompts.
+// app config dir used for settings.
 func (a *Adapter) MCPConfigPath(homeDir string, _ string) string {
 	return filepath.Join(homeDir, ".kiro", "settings", "mcp.json")
 }
 
 func (a *Adapter) kiroConfigDir(homeDir string) string {
-	switch runtime.GOOS {
-	case "darwin":
-		// macOS: ~/Library/Application Support/Kiro/User/
-		return filepath.Join(homeDir, "Library", "Application Support", "Kiro", "User")
-	case "windows":
-		// Windows: %APPDATA%/kiro/User/
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			appData = filepath.Join(homeDir, "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "kiro", "User")
-	default:
-		// Linux and others: ~/.config/kiro/user (respects XDG_CONFIG_HOME)
-		xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-		if xdgConfigHome == "" {
-			xdgConfigHome = filepath.Join(homeDir, ".config")
-		}
-		return filepath.Join(xdgConfigHome, "kiro", "user")
-	}
+	return filepath.Join(homeDir, "Library", "Application Support", "Kiro", "User")
 }
 
 // --- Optional capabilities ---

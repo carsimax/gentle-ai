@@ -113,14 +113,8 @@ go test ./...
 go run ./internal/gofmtcheck
 \`\`\`
 
-**E2E Tests** (Docker required)
-\`\`\`bash
-cd e2e && ./docker-test.sh
-\`\`\`
-
 - [ ] Unit tests pass (`go test ./...`)
 - [ ] Go format passes (`go run ./internal/gofmtcheck`)
-- [ ] E2E tests pass (`cd e2e && ./docker-test.sh`)
 - [ ] Manually tested locally
 
 ## ✅ Contributor Checklist
@@ -130,7 +124,6 @@ cd e2e && ./docker-test.sh
 - [ ] API read-back confirms exactly one appropriate `type:*` label on this PR
 - [ ] Unit tests pass (`go test ./...`)
 - [ ] Go format passes (`go run ./internal/gofmtcheck`)
-- [ ] E2E tests pass (`cd e2e && ./docker-test.sh`)
 - [ ] Benchmark validation completed, or this change is not applicable to the benchmark (explain why in the Test Plan).
 - [ ] If behavior changed, docs in `docs/` are updated in the same PR (reference docs track `main`)
 - [ ] My commits follow Conventional Commits format
@@ -161,7 +154,6 @@ These workflows may run on a PR. Establish which are REQUIRED from current targe
 | **Check PR Has `type:*` Label** | Exactly one `type:*` label is applied to the PR | Use the canonical issue-creation workflow contract only when a current direct instruction and target-host capability authorize the exact action; otherwise wait |
 | **Unit Tests** | `go test ./...` passes | Fix failing tests before pushing |
 | **Go Format** | `go run ./internal/gofmtcheck` passes | Format malformed Go files before pushing |
-| **E2E Tests** | `cd e2e && ./docker-test.sh` passes | Fix failing E2E scenarios before pushing |
 
 ---
 
@@ -258,8 +250,6 @@ go test ./internal/tui/...
 # Unit tests — verbose
 go test -v ./...
 
-# E2E tests (Docker must be running)
-cd e2e && ./docker-test.sh
 ```
 
 ### Open a PR

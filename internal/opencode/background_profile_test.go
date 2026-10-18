@@ -4,16 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
 )
 
 func TestPOSIXActivationPersistsManagedProfileBlockAndDeactivationRemovesIt(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login profiles are not used on Windows")
-	}
 	t.Setenv("SHELL", "/bin/zsh")
 	t.Setenv("ZDOTDIR", "")
 	home := t.TempDir()
@@ -27,11 +23,10 @@ func TestPOSIXActivationPersistsManagedProfileBlockAndDeactivationRemovesIt(t *t
 		t.Fatal(err)
 	}
 	options := ActivationOptions{
-		OS:            "linux",
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 
 	first, err := Activate(home, options)
@@ -96,26 +91,17 @@ func profileTestOptions(t *testing.T, shell string) ActivationOptions {
 		t.Fatal(err)
 	}
 	return ActivationOptions{
-		OS:            "linux",
 		Shell:         shell,
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
+		ResolveTarget: func(string, string) (string, error) { return target, nil },
 	}
 }
 
-func skipProfileTestOnWindows(t *testing.T) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login profiles are not used on Windows")
-	}
-}
-
-// Issue #3452: WSL Ubuntu ships ~/.profile without ~/.bash_profile; a new
+// Issue #3452: with ~/.profile but no ~/.bash_profile, a new
 // .bash_profile would shadow .profile, so the block goes into .profile.
 func TestBashActivationWritesFirstExistingLoginProfile(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	profile := filepath.Join(home, ".profile")
 	userContent := "if [ -n \"$BASH_VERSION\" ]; then . \"$HOME/.bashrc\"; fi\n"
@@ -134,7 +120,6 @@ func TestBashActivationWritesFirstExistingLoginProfile(t *testing.T) {
 }
 
 func TestBashActivationPrefersBashProfileAndCreatesProfileWhenNoneExist(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	t.Run("existing bash_profile", func(t *testing.T) {
 		home := t.TempDir()
 		for _, name := range []string{".bash_profile", ".profile"} {
@@ -165,7 +150,6 @@ func TestBashActivationPrefersBashProfileAndCreatesProfileWhenNoneExist(t *testi
 // Profiles that cannot be updated safely are never modified; the launcher is
 // still written and the activation reason tells the user exactly what to add.
 func TestActivationRefusesUnsafeLoginProfilesWithManualGuidance(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	for _, tt := range []struct {
 		name   string
 		shell  string
@@ -266,7 +250,6 @@ func TestActivationRefusesUnsafeLoginProfilesWithManualGuidance(t *testing.T) {
 }
 
 func TestActivationReplacesStaleBlockAndPreservesCRLF(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	profile := filepath.Join(home, ".zprofile")
 	stale := strings.ReplaceAll(expectedProfileBlock("/old/home/.gentle-ai/bin"), "\n", "\r\n")
@@ -285,7 +268,6 @@ func TestActivationReplacesStaleBlockAndPreservesCRLF(t *testing.T) {
 }
 
 func TestActivationRevalidatesProfileBeforeWrite(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	profile := filepath.Join(home, ".zprofile")
 	if err := os.WriteFile(profile, []byte("export A=1\n"), 0o644); err != nil {
@@ -309,7 +291,6 @@ func TestActivationRevalidatesProfileBeforeWrite(t *testing.T) {
 }
 
 func TestActivationRollbackRestoresProfiles(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	pathErr := errors.New("path update failed")
 	t.Run("existing profile restored", func(t *testing.T) {
 		home := t.TempDir()
@@ -362,7 +343,6 @@ func TestActivationRollbackRestoresProfiles(t *testing.T) {
 }
 
 func TestDeactivationRemovesBlocksFromEveryManagedProfileOnly(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	block := expectedProfileBlock(BinDir(home))
 	files := map[string]string{
@@ -388,7 +368,6 @@ func TestDeactivationRemovesBlocksFromEveryManagedProfileOnly(t *testing.T) {
 }
 
 func TestRemoveManagedProfileBlockLeavesUnsafeProfilesUntouched(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	block := expectedProfileBlock(BinDir(home))
 	edited := filepath.Join(home, ".zprofile")
@@ -450,7 +429,6 @@ func TestProfileBlockFollowsTheLastLineEnding(t *testing.T) {
 // Only the startup files the current shell reads count: a block left in
 // another shell's profile does not put the launcher on a new shell's PATH.
 func TestResolveLoginShellActivationReadsTheCurrentShellsProfile(t *testing.T) {
-	skipProfileTestOnWindows(t)
 	home := t.TempDir()
 	binDir := BinDir(home)
 	writeExecutable(t, POSIXLauncherPath(home), posixLauncher("/opt/opencode/bin/opencode"))
@@ -460,7 +438,7 @@ func TestResolveLoginShellActivationReadsTheCurrentShellsProfile(t *testing.T) {
 	}
 	t.Setenv("ZDOTDIR", "")
 	t.Setenv("SHELL", "/bin/zsh")
-	options := ActivationOptions{OS: "linux", Path: "/usr/bin"}
+	options := ActivationOptions{Path: "/usr/bin"}
 	if got := ResolveLoginShellActivation(home, options); got.Status != ActivationStatusPending {
 		t.Fatalf("zsh: block only in .profile = %#v, want pending", got)
 	}

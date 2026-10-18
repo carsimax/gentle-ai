@@ -309,7 +309,7 @@ func validateArtifacts(root string, payload []byte, markerTime time.Time, contra
 	if err := requireJSONEOF(decoder); err != nil {
 		return err
 	}
-	expectedCounts := map[string]int{"Metadata": 1, "Binary": 4, "Archive": 6, "Checksum": 1, "Homebrew Formula": 1}
+	expectedCounts := map[string]int{"Metadata": 1, "Binary": 1, "Archive": 3, "Checksum": 1, "Homebrew Formula": 1}
 	byType := make(map[string][]artifact)
 	counts := make(map[string]int)
 	paths := make(map[string]struct{})
@@ -329,9 +329,6 @@ func validateArtifacts(root string, payload []byte, markerTime time.Time, contra
 	}
 
 	expectedTargets := map[string]string{
-		"linux/amd64":  "linux_amd64_v1",
-		"linux/arm64":  "linux_arm64_v8.0",
-		"darwin/amd64": "darwin_amd64_v1",
 		"darwin/arm64": "darwin_arm64_v8.0",
 	}
 	seenBinaries := make(map[string]struct{})
@@ -563,10 +560,8 @@ builds:
     env:
       - CGO_ENABLED=0
     goos:
-      - linux
       - darwin
     goarch:
-      - amd64
       - arm64
     flags:
       - -trimpath

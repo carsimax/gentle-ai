@@ -29,7 +29,6 @@ func undetectableOpenCodeHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	t.Chdir(workspace)
 	if err := state.Write(home, state.InstallState{
 		InstalledAgents:     []string{"claude-code", "opencode"},

@@ -20,7 +20,7 @@ func TestResolveComponentInstallHomebrewExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range []string{"PATH", "/opt/homebrew/bin/brew", "/usr/local/bin/brew", "/home/linuxbrew/.linuxbrew/bin/brew", "missing"} {
+	for _, target := range []string{"PATH", "/opt/homebrew/bin/brew", "/usr/local/bin/brew", "missing"} {
 		t.Run(target, func(t *testing.T) {
 			originalLookPath, originalStat, originalProbe := cmdLookPath, osStat, cmdBrewHelpTrust
 			t.Cleanup(func() { cmdLookPath, osStat, cmdBrewHelpTrust = originalLookPath, originalStat, originalProbe })
@@ -64,7 +64,7 @@ func TestResolveComponentInstallHomebrewExecutable(t *testing.T) {
 }
 
 func TestResolveComponentInstallHomebrewTrust(t *testing.T) {
-	for _, os := range []string{"darwin", "linux"} {
+	for _, os := range []string{"darwin"} {
 		for _, component := range []model.ComponentID{model.ComponentEngram, model.ComponentGGA} {
 			for _, supported := range []bool{true, false} {
 				t.Run(fmt.Sprintf("%s/%s/trust=%t", os, component, supported), func(t *testing.T) {

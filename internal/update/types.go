@@ -40,14 +40,14 @@ type ToolInfo struct {
 	GoImportPath      string        // for go-install tools (e.g. "github.com/.../cmd/engram")
 
 	// FallbackPaths returns a list of absolute paths to check when exec.LookPath
-	// fails. This covers the Windows scenario where AddToUserPath updates the
-	// registry but the running process PATH is stale after install. When a path
-	// is found on disk, detectInstalledVersion runs the detect command using that
+	// fails because the running process PATH does not yet include the install
+	// directory (for example ~/.local/bin right after install). When a path is
+	// found on disk, detectInstalledVersion runs the detect command using that
 	// full path rather than the bare binary name.
 	//
-	// The function receives the user home directory and the value of LOCALAPPDATA
-	// (empty on non-Windows). May be nil when no fallback is needed.
-	FallbackPaths func(homeDir, localAppData string) []string
+	// The function receives the user home directory. May be nil when no fallback
+	// is needed.
+	FallbackPaths func(homeDir string) []string
 }
 
 // UpdateResult holds the result of checking a single tool for updates.

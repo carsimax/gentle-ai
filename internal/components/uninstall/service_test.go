@@ -2,16 +2,13 @@ package uninstall
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -104,7 +101,7 @@ func TestUninstallOpenCodeFamilyManagedAgents(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
+				if info.Mode().Perm() != 0600 {
 					t.Fatalf("mode: %v", info.Mode().Perm())
 				}
 			}
@@ -376,8 +373,7 @@ func TestBuildPlanRemovesOnlyOwnedOpenCodeLaunchers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := opencodeactivation.LauncherPaths(homeDir, runtime.GOOS)
-	ownedPath := paths[0]
+	ownedPath := opencodeactivation.POSIXLauncherPath(homeDir)
 	userPath := filepath.Join(opencodeactivation.BinDir(homeDir), "user-opencode-launcher")
 	for index, path := range []string{ownedPath, userPath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -419,7 +415,7 @@ func TestUninstallPreservesLauncherWithIncidentalMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := opencodeactivation.LauncherPaths(homeDir, runtime.GOOS)[0]
+	path := opencodeactivation.POSIXLauncherPath(homeDir)
 	content := []byte("user launcher mentions " + opencodeactivation.OwnershipMarker)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
@@ -442,11 +438,8 @@ func TestUninstallPreservesLauncherWithIncidentalMarker(t *testing.T) {
 // Issue #3451: uninstall never follows or removes a symlink at the launcher
 // path, even when its target holds managed launcher bytes.
 func TestUninstallPreservesManagedLauncherSymlink(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires privileges not guaranteed on Windows")
-	}
 	homeDir := t.TempDir()
-	path := opencodeactivation.LauncherPaths(homeDir, runtime.GOOS)[0]
+	path := opencodeactivation.POSIXLauncherPath(homeDir)
 	target := filepath.Join(t.TempDir(), "launcher-target")
 	targetContent := ownedOpenCodeLauncher(path)
 	if err := os.WriteFile(target, targetContent, 0o755); err != nil {
@@ -480,9 +473,6 @@ func TestUninstallPreservesManagedLauncherSymlink(t *testing.T) {
 // Issue #3452: uninstall removes only the canonical managed PATH block from
 // login profiles and preserves every user line, edited blocks, and symlinks.
 func TestUninstallRemovesOnlyManagedOpenCodeProfileBlock(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login profiles are not used on Windows")
-	}
 	homeDir := t.TempDir()
 	binDir := opencodeactivation.BinDir(homeDir)
 	block := "# >>> gentle-ai managed OpenCode launcher >>>\n" + opencodeactivation.ProfileExportLine(binDir) + "\n# <<< gentle-ai managed OpenCode launcher <<<\n"
@@ -540,15 +530,8 @@ func TestUninstallRemovesOnlyManagedOpenCodeProfileBlock(t *testing.T) {
 
 // ownedOpenCodeLauncher returns the exact bytes Gentle AI generates for the
 // launcher at path, targeting a fixed historical OpenCode location.
-func ownedOpenCodeLauncher(path string) []byte {
-	switch filepath.Ext(path) {
-	case ".cmd":
-		return []byte("@echo off\r\nrem " + opencodeactivation.OwnershipMarker + "\r\nsetlocal\r\nif not defined OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS set \"OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\"\r\n\"C:\\old\\opencode.exe\" %*\r\nexit /b %ERRORLEVEL%\r\n")
-	case ".ps1":
-		return []byte("# " + opencodeactivation.OwnershipMarker + "\r\n$ErrorActionPreference = 'Stop'\r\nif (-not (Test-Path Env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS)) { $env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS = 'true' }\r\n& 'C:\\old\\opencode.exe' @args\r\nexit $LASTEXITCODE\r\n")
-	default:
-		return []byte("#!/bin/sh\n# " + opencodeactivation.OwnershipMarker + "\nset -eu\nif [ -z \"${OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS+x}\" ]; then\n  export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\nfi\nexec '/old/opencode' \"$@\"\n")
-	}
+func ownedOpenCodeLauncher(string) []byte {
+	return []byte("#!/bin/sh\n# " + opencodeactivation.OwnershipMarker + "\nset -eu\nif [ -z \"${OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS+x}\" ]; then\n  export OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true\nfi\nexec '/old/opencode' \"$@\"\n")
 }
 
 func TestUninstallOpenCodeClearsBackgroundIntent(t *testing.T) {
@@ -1073,9 +1056,6 @@ func TestPartialUninstallPiDoesNotReportAbsentRetainedResources(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := os.Symlink(filepath.Join(svc.homeDir, "missing"), path); err != nil {
-			if runtime.GOOS == "windows" && errors.Is(err, syscall.Errno(1314)) {
-				t.Skipf("symlink privilege unavailable: %v", err)
-			}
 			t.Fatal(err)
 		}
 		result, err := svc.PartialUninstall([]model.AgentID{model.AgentPi}, nil)
@@ -1446,7 +1426,7 @@ func TestComponentOperationsClaudeNeverDeleteUserRegistry(t *testing.T) {
 			t.Fatalf("registry still contains mcpServers.context7: %#v", registry)
 		}
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("registry mode widened to %v, want 0600", info.Mode().Perm())
 	}
 }
@@ -1503,7 +1483,7 @@ func TestComponentOperationsEngramClaudePreservesRegistryAndRemovesManagedLegacy
 	}
 	if info, statErr := os.Stat(registryPath); statErr != nil {
 		t.Fatalf("Stat(user registry) error = %v", statErr)
-	} else if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+	} else if info.Mode().Perm() != 0o600 {
 		t.Fatalf("user registry mode = %o; want 0600", info.Mode().Perm())
 	}
 }
@@ -2313,7 +2293,6 @@ func TestFullAgentOpenCodePluginsUnderXDGConfigHome(t *testing.T) {
 	homeDir := t.TempDir()
 	xdg := filepath.Join(homeDir, ".xdg")
 	t.Setenv("HOME", homeDir)
-	t.Setenv("USERPROFILE", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", xdg)
 
 	svc, err := NewService(homeDir, t.TempDir(), "dev")
@@ -2517,9 +2496,6 @@ func TestPartialUninstallLeavesNonJSONNativeSettingsUntouched(t *testing.T) {
 				t.Fatalf("native settings = %q, want bytes preserved %q", got, tt.content)
 			}
 			wantMode := os.FileMode(0o600)
-			if runtime.GOOS == "windows" {
-				wantMode = 0o666 // Windows reports only the read-only attribute.
-			}
 			if info, err := os.Stat(settingsPath); err != nil || info.Mode().Perm() != wantMode {
 				t.Fatalf("native settings mode = %v, %v; want %v", info, err, wantMode)
 			}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -62,9 +61,6 @@ func TestInstallEngramRefusesUnsafeOpenCodeSettingsBeforeSetup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" && (tt.symlink || tt.mode == 0) {
-				t.Skip("POSIX file modes and symlinks")
-			}
 			home, workspace, selected, decoy, _ := themeSettingsFixture(t)
 			setupCalls := stubEngramSetupRunner(t, home)
 			if tt.symlink {

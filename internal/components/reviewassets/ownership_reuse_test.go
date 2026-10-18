@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -105,10 +104,6 @@ func TestOwnershipReuseFreshLedgerBytes(t *testing.T) {
 		t.Fatalf("ledger bytes changed:\n%s\nwant:\n%s", got, want)
 	}
 	wantMode := os.FileMode(0o644)
-	if runtime.GOOS == "windows" {
-		// Windows exposes writable files as 0666 rather than POSIX permission bits.
-		wantMode = 0o666
-	}
 	if info, err := os.Lstat(ledger); err != nil || info.Mode().Perm() != wantMode {
 		t.Fatalf("ledger mode: %v %v, want %04o", info, err, wantMode)
 	}

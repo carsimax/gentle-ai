@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -91,13 +90,7 @@ func TestOpaqueRepositoryContextResolutionNamesDistinctCauses(t *testing.T) {
 			messages[tt.name] = message
 		})
 	}
-	wantMessages := len(cases)
-	if runtime.GOOS == "windows" {
-		// The Git shim is a POSIX shell script, so Windows exercises the two
-		// native filesystem roots while retaining their distinct-cause proof.
-		wantMessages -= 2
-	}
-	assertPairwiseDistinct(t, messages, wantMessages)
+	assertPairwiseDistinct(t, messages, len(cases))
 }
 
 // TestOpaqueRepositoryContextCaptureNamesDistinctCauses covers the collapse
@@ -155,14 +148,7 @@ func TestOpaqueRepositoryContextCaptureNamesDistinctCauses(t *testing.T) {
 			messages[tt.name] = message
 		})
 	}
-	wantMessages := len(cases)
-	if runtime.GOOS == "windows" {
-		// blockCanonicalAuthorityWrite requires POSIX permissions, so Windows
-		// exercises only the occupied-slot root while retaining its
-		// distinct-cause proof.
-		wantMessages--
-	}
-	assertPairwiseDistinct(t, messages, wantMessages)
+	assertPairwiseDistinct(t, messages, len(cases))
 }
 
 // TestOpaqueRepositoryContextCauseIsScrubbed is the other half of the contract:
@@ -234,19 +220,6 @@ func nativeNotExistCause(t *testing.T) string {
 		t.Fatalf("probe error carries no separable cause to render: %v", err)
 	}
 	return pathErr.Err.Error()
-}
-
-// opaqueNativeCause still serves one call site, and its two arms are safe for
-// different reasons. The Windows arm expects "unsafe RAR authority path",
-// which gentle-ai produces itself. The Unix arm does pin an errno text, "not
-// a directory", and is safe because Go renders errno 20 from its own
-// compile-time table rather than from the installation. Neither arm reaches
-// FormatMessage, which is what the replaced assertions depended on.
-func opaqueNativeCause(unix, windows string) string {
-	if runtime.GOOS == "windows" {
-		return windows
-	}
-	return unix
 }
 
 // assertPairwiseDistinct is the whole point of these tests: every root that

@@ -15,8 +15,7 @@ func TestBetaEngramPreflightStopsBeforeBackupAndApply(t *testing.T) {
 	t.Cleanup(func() { cmdLookPath = original })
 	profiles := []system.PlatformProfile{
 		{OS: "darwin", PackageManager: "brew", Supported: true},
-		{OS: "linux", PackageManager: "apt", Supported: true},
-		{OS: "windows", PackageManager: "winget", Supported: true},
+		{OS: "darwin", Supported: true},
 	}
 	cases := []struct {
 		name                                       string
@@ -32,7 +31,7 @@ func TestBetaEngramPreflightStopsBeforeBackupAndApply(t *testing.T) {
 	}
 	for _, profile := range profiles {
 		for _, tc := range cases {
-			t.Run(profile.OS+"/"+tc.name, func(t *testing.T) {
+			t.Run(profile.OS+"/"+profile.PackageManager+"/"+tc.name, func(t *testing.T) {
 				goLookups := 0
 				cmdLookPath = func(name string) (string, error) {
 					if name == "go" {
@@ -143,7 +142,7 @@ func TestBetaEngramPreflightPublicInstallConsumers(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				result, orchestrator, _ := ExecuteTUIInstallRecordingCodexServiceTier(home, selection, resolved, windowsProfile, model.OpenCodeBackgroundAuto, model.PiBackgroundAuto, nil)
+				result, orchestrator, _ := ExecuteTUIInstallRecordingCodexServiceTier(home, selection, resolved, macProfile, model.OpenCodeBackgroundAuto, model.PiBackgroundAuto, nil)
 				if orchestrator != nil {
 					defer orchestrator.Finish()
 				}

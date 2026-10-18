@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -80,7 +79,6 @@ func TestManagedReviewerAssetProvenanceRefusesOnlyRecordedSkew(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
 			persist(home)
 			if err := authorizeManagedReviewerAssets(); err != nil {
 				t.Fatalf("authorize = %v, want no refusal", err)
@@ -91,7 +89,6 @@ func TestManagedReviewerAssetProvenanceRefusesOnlyRecordedSkew(t *testing.T) {
 	t.Run("recorded digest that disagrees", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
-		t.Setenv("USERPROFILE", home)
 		staleManagedReviewerAssets(t, home)
 		requireManagedAssetProvenanceError(t, authorizeManagedReviewerAssets(), managedAssetProvenanceRefusal)
 	})
@@ -394,59 +391,42 @@ func TestManagedAssetsContinuationUsesInvokingExecutable(t *testing.T) {
 		if bare {
 			return path
 		}
-		if runtime.GOOS == "windows" {
-			return "\"" + strings.ReplaceAll(path, "\"", "\\\"") + "\""
-		}
 		return "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
 	}
 
 	// Unit: the rendered command is rooted at whichever executable resolution
-	// reports, using one exact platform-specific encoding: POSIX paths quote
-	// with single quotes (no POSIX shell expands anything inside them, so $ and
-	// backticks survive literally), Windows paths quote with double quotes
-	// (cmd.exe command syntax), a path over the safe bare class stays bare, and
+	// reports: paths quote with single quotes (no POSIX shell expands anything
+	// inside them, so $ and backticks survive literally), a path over the safe
+	// bare class stays bare, and
 	// an unresolvable executable keeps the historical bare `gentle-ai` form
 	// instead of guessing a path it cannot prove.
 	for name, tc := range map[string]struct {
 		executable func() (string, error)
-		goos       string
 		want       string
 	}{
-		"windows path with spaces uses double quotes": {
-			executable: func() (string, error) { return `C:\Program Files\gentle-ai\gentle-ai.exe`, nil },
-			goos:       "windows",
-			want:       `"C:\Program Files\gentle-ai\gentle-ai.exe" sync --agent opencode`,
-		},
 		"posix path with shell expansion uses single quotes": {
 			executable: func() (string, error) { return `/opt/$HOME/gentle-ai`, nil },
-			goos:       "linux",
 			want:       `'/opt/$HOME/gentle-ai' sync --agent opencode`,
 		},
 		"posix path with an embedded single quote escapes it": {
 			executable: func() (string, error) { return `/opt/o'brien/gentle-ai`, nil },
-			goos:       "linux",
 			want:       `'/opt/o'\''brien/gentle-ai' sync --agent opencode`,
 		},
 		"posix path over the safe bare class stays bare": {
 			executable: func() (string, error) { return `/opt/gentle-ai/bin/gentle-ai`, nil },
-			goos:       "linux",
 			want:       `/opt/gentle-ai/bin/gentle-ai sync --agent opencode`,
 		},
 		"unresolvable executable keeps the bare fallback": {
 			executable: func() (string, error) { return "", errors.New("unresolvable") },
-			goos:       "linux",
 			want:       `gentle-ai sync --agent opencode`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			previousPath := reviewManagedAssetsExecutablePath
-			previousGOOS := reviewManagedAssetsGOOS
 			previousArgs := append([]string(nil), os.Args...)
 			reviewManagedAssetsExecutablePath = tc.executable
-			reviewManagedAssetsGOOS = tc.goos
 			t.Cleanup(func() {
 				reviewManagedAssetsExecutablePath = previousPath
-				reviewManagedAssetsGOOS = previousGOOS
 				os.Args = previousArgs
 			})
 			// Keep these renderer cases focused on os.Executable. A relative
@@ -474,26 +454,17 @@ func TestManagedAssetsContinuationUsesInvokingExecutable(t *testing.T) {
 	// original path, for every quoting form the renderer can emit --
 	// including the POSIX splice for an embedded apostrophe, whose \'
 	// sequence must decode to a literal apostrophe in argv.
-	for name, tc := range map[string]struct {
-		path string
-		goos string
-	}{
-		"posix safe path":                {`/opt/gentle-ai/bin/gentle-ai`, "linux"},
-		"posix path with expansion":      {`/opt/$HOME/gentle-ai`, "linux"},
-		"posix path with apostrophe":     {`/opt/o'brien/gentle-ai`, "linux"},
-		"posix path with backslashes":    {`/opt/we ird\x\gentle-ai`, "linux"},
-		"windows path with spaces":       {`C:\Program Files\gentle-ai\gentle-ai.exe`, "windows"},
-		"quoted UNC path with spaces":    {`\\server\gentle tools\gentle-ai.exe`, "windows"},
-		"quoted UNC path without spaces": {`\\server\share\gentle-ai.exe`, "windows"},
+	for name, path := range map[string]string{
+		"posix safe path":             `/opt/gentle-ai/bin/gentle-ai`,
+		"posix path with expansion":   `/opt/$HOME/gentle-ai`,
+		"posix path with apostrophe":  `/opt/o'brien/gentle-ai`,
+		"posix path with backslashes": `/opt/we ird\x\gentle-ai`,
 	} {
 		t.Run("round-trip "+name, func(t *testing.T) {
-			previousGOOS := reviewManagedAssetsGOOS
-			reviewManagedAssetsGOOS = tc.goos
-			t.Cleanup(func() { reviewManagedAssetsGOOS = previousGOOS })
-			rendered := managedAssetsExecutableToken(tc.path)
+			rendered := managedAssetsExecutableToken(path)
 			argv := splitContinuationCommand(rendered + " sync --agent opencode")
-			if len(argv) != 4 || argv[0] != tc.path || argv[1] != "sync" || argv[2] != "--agent" || argv[3] != "opencode" {
-				t.Fatalf("round-trip of %q rendered %q split to argv %q, want the original path plus the sync dispatch", tc.path, rendered, argv)
+			if len(argv) != 4 || argv[0] != path || argv[1] != "sync" || argv[2] != "--agent" || argv[3] != "opencode" {
+				t.Fatalf("round-trip of %q rendered %q split to argv %q, want the original path plus the sync dispatch", path, rendered, argv)
 			}
 		})
 	}
@@ -534,20 +505,10 @@ func TestManagedAssetsContinuationUsesInvokingExecutable(t *testing.T) {
 	if len(argv) != 4 || argv[0] != invoking || argv[1] != "sync" || argv[2] != "--agent" || argv[3] != "opencode" {
 		t.Fatalf("continuation command %q split to argv %q, want the invoking executable %q plus the sync dispatch", status.NextTransition.Continuation.Command, argv, invoking)
 	}
-	var run *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// The quoted Windows form is cmd.exe command syntax; PowerShell
-		// requires the call operator for a leading quoted token, so no
-		// in-process shell here can prove that platform's paste-and-run
-		// contract. The argv dispatch still exercises executable startup,
-		// CLI dispatch, and flag parsing.
-		run = exec.Command(argv[0], argv[1:]...)
-	} else {
-		// POSIX: run the printed line through a real shell exactly as an
-		// operator would paste it, proving the quoting survives expansion
-		// rather than merely decoding it ourselves.
-		run = exec.Command("sh", "-c", status.NextTransition.Continuation.Command)
-	}
+	// Run the printed line through a real shell exactly as an operator would
+	// paste it, proving the quoting survives expansion rather than merely
+	// decoding it ourselves.
+	run := exec.Command("sh", "-c", status.NextTransition.Continuation.Command)
 	run.Env = append(os.Environ(), "GENTLE_AI_TEST_CLI_STANDIN=1")
 	if out, err := run.CombinedOutput(); err != nil {
 		t.Fatalf("executing the advertised continuation %q failed: %v\n%s", status.NextTransition.Continuation.Command, err, out)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -214,7 +213,7 @@ func TestAdapter_Detect_FallbackPaths(t *testing.T) {
 			return statResult{isDir: info != nil && info.IsDir(), err: err}
 		},
 		pathExists: func(path string) bool {
-			return path == filepath.Join(tmpDir, ".local", "bin", binaryName())
+			return path == filepath.Join(tmpDir, ".local", "bin", "kimi")
 		},
 		userHomeDir: func() (string, error) {
 			return tmpDir, nil
@@ -228,7 +227,7 @@ func TestAdapter_Detect_FallbackPaths(t *testing.T) {
 	if !installed {
 		t.Fatal("Detect() installed = false, want true when fallback path exists")
 	}
-	if binaryPath != filepath.Join(tmpDir, ".local", "bin", binaryName()) {
+	if binaryPath != filepath.Join(tmpDir, ".local", "bin", "kimi") {
 		t.Fatalf("Detect() binaryPath = %q, want fallback path", binaryPath)
 	}
 }
@@ -314,80 +313,29 @@ func TestResolveConfigRoot_UnexpectedStatErrorFails(t *testing.T) {
 }
 
 func TestAdapter_PostInstallMessage(t *testing.T) {
-	tests := []struct {
-		name     string
-		os       string
-		expected string
-	}{
-		{
-			name:     "Unix paths",
-			os:       "linux",
-			expected: "/.kimi/agents/gentleman.yaml",
-		},
-		{
-			name:     "Windows paths",
-			os:       "windows",
-			expected: `\.kimi\agents\gentleman.yaml`,
-		},
+	// Stub the stat seam so the legacy layout (and its --agent-file
+	// guidance) is deterministic regardless of the host filesystem.
+	a := &Adapter{
+		statPath: func(string) statResult { return statResult{err: os.ErrNotExist} },
 	}
+	homeDir := "/tmp/test"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Stub the stat seam so the legacy layout (and its --agent-file
-			// guidance) is deterministic regardless of the host filesystem.
-			a := &Adapter{
-				statPath: func(string) statResult { return statResult{err: os.ErrNotExist} },
-			}
-			// Mock homeDir relative to expected path style.
-			// We use a safe path like /tmp/test which filepath.FromSlash will normalize
-			// to \tmp\test on Windows.
-			homeDir := "/tmp/test"
-			if tt.os == "windows" {
-				homeDir = `C:\Users\test`
-			}
-
-			msg := a.PostInstallMessage(homeDir)
-			if strings.Contains(strings.ToLower(msg), "sdd") || strings.Contains(msg, "/skill:") {
-				t.Fatalf("PostInstallMessage() advertises retired skill commands:\n%s", msg)
-			}
-			if !strings.Contains(msg, "ODD") || !strings.Contains(msg, "kimi --agent-file") {
-				t.Fatalf("PostInstallMessage() missing ODD launch instructions:\n%s", msg)
-			}
-			if !strings.Contains(msg, `"`+filepath.Join(homeDir, ".config", "agents", "skills")+`"`) {
-				t.Fatalf("PostInstallMessage() missing quoted skills root:\n%s", msg)
-			}
-
-			// Construct expected path to verify against quoted output
-			gentlemanYaml := filepath.Join(homeDir, ".kimi", "agents", "gentleman.yaml")
-
-			// Normalize the expected string to the current host's separator.
-			// Since the code uses filepath.Join, it will use \ on Windows and / on Linux.
-			// The test should expect the host's actual separator if we want it to PASS
-			// while running on that host.
-			normalizedExpected := filepath.FromSlash(tt.expected)
-
-			// On Windows, if we are simulating we want backslashes.
-			// If we are on Windows and testing 'Unix paths' case, it will fail because
-			// the code (running on Windows) used \. This is expected.
-			// We skip the cross-platform check if it contradicts the host's logic,
-			// or we only check the one matching the current host.
-			// On Windows, if we are simulating we want backslashes.
-			// If we are on Windows and testing 'Unix paths' case, it will fail because
-			// the code (running on Windows) used \. This is expected.
-			// We skip the cross-platform check if it contradicts the host's logic,
-			// or we only check the one matching the current host.
-			if (runtime.GOOS == "windows" && tt.os == "windows") || (runtime.GOOS != "windows" && tt.os == "linux") {
-				// Verify path is present
-				if !strings.Contains(msg, normalizedExpected) {
-					t.Errorf("PostInstallMessage() for %s missing expected path: %q\ngot: %q", tt.os, normalizedExpected, msg)
-				}
-				// Verify path is quoted (specifically the gentleman.yaml path)
-				quotedExpected := `"` + gentlemanYaml + `"`
-				if !strings.Contains(msg, quotedExpected) {
-					t.Errorf("PostInstallMessage() for %s: path not quoted: %q", tt.os, quotedExpected)
-				}
-			}
-		})
+	msg := a.PostInstallMessage(homeDir)
+	if strings.Contains(strings.ToLower(msg), "sdd") || strings.Contains(msg, "/skill:") {
+		t.Fatalf("PostInstallMessage() advertises retired skill commands:\n%s", msg)
+	}
+	if !strings.Contains(msg, "ODD") || !strings.Contains(msg, "kimi --agent-file") {
+		t.Fatalf("PostInstallMessage() missing ODD launch instructions:\n%s", msg)
+	}
+	if !strings.Contains(msg, `"`+filepath.Join(homeDir, ".config", "agents", "skills")+`"`) {
+		t.Fatalf("PostInstallMessage() missing quoted skills root:\n%s", msg)
+	}
+	if !strings.Contains(msg, "/.kimi/agents/gentleman.yaml") {
+		t.Errorf("PostInstallMessage() missing expected path: %q\ngot: %q", "/.kimi/agents/gentleman.yaml", msg)
+	}
+	quotedExpected := `"` + filepath.Join(homeDir, ".kimi", "agents", "gentleman.yaml") + `"`
+	if !strings.Contains(msg, quotedExpected) {
+		t.Errorf("PostInstallMessage(): path not quoted: %q", quotedExpected)
 	}
 }
 

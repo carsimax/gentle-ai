@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -17,63 +16,10 @@ type Result struct {
 	Files   []string
 }
 
-const claudeLegacySkillRegistryCommand = `gentle-ai skill-registry refresh --quiet --no-gitignore --cwd "${CLAUDE_PROJECT_DIR:-$PWD}" || true`
-
-func claudeSkillRegistryCommand(platform string) string {
-	if platform == "windows" {
-		return `powershell -NoProfile -Command 'if (Test-Path env:CLAUDE_PROJECT_DIR) { $dir = $env:CLAUDE_PROJECT_DIR } else { $dir = $PWD }; gentle-ai skill-registry refresh --quiet --no-gitignore --cwd "$dir"; exit 0'`
-	}
-	return claudeLegacySkillRegistryCommand
-}
-
-// pruneClaudeLegacySkillRegistryHooks removes only the retired POSIX command
-// under UserPromptSubmit, preserving unrelated hooks and their outer entries.
-func pruneClaudeLegacySkillRegistryHooks(entries []any) ([]any, bool) {
-	var keptEntries []any
-	changed := false
-	for _, entry := range entries {
-		item, ok := entry.(map[string]any)
-		if !ok {
-			keptEntries = append(keptEntries, entry)
-			continue
-		}
-		hooks, ok := item["hooks"].([]any)
-		if !ok {
-			keptEntries = append(keptEntries, entry)
-			continue
-		}
-		var keptHooks []any
-		for _, hook := range hooks {
-			h, ok := hook.(map[string]any)
-			if ok && h["command"] == claudeLegacySkillRegistryCommand {
-				changed = true
-				continue
-			}
-			keptHooks = append(keptHooks, hook)
-		}
-		if len(keptHooks) == len(hooks) {
-			keptEntries = append(keptEntries, entry)
-			continue
-		}
-		if len(keptHooks) == 0 {
-			continue
-		}
-		copyItem := make(map[string]any, len(item))
-		for k, v := range item {
-			copyItem[k] = v
-		}
-		copyItem["hooks"] = keptHooks
-		keptEntries = append(keptEntries, copyItem)
-	}
-	return keptEntries, changed
-}
+const claudeSkillRegistryCommand = `gentle-ai skill-registry refresh --quiet --no-gitignore --cwd "${CLAUDE_PROJECT_DIR:-$PWD}" || true`
 
 // InstallSkillRegistry installs startup refresh hooks without selecting SDD.
 func InstallSkillRegistry(homeDir string, adapter agents.Adapter) (Result, error) {
-	return installSkillRegistry(homeDir, adapter, runtime.GOOS)
-}
-
-func installSkillRegistry(homeDir string, adapter agents.Adapter, platform string) (Result, error) {
 	var path, event, command string
 	switch adapter.Agent() {
 	case model.AgentCodex:
@@ -83,7 +29,7 @@ func installSkillRegistry(homeDir string, adapter agents.Adapter, platform strin
 	case model.AgentClaudeCode:
 		path = adapter.SettingsPath(homeDir)
 		event = "UserPromptSubmit"
-		command = claudeSkillRegistryCommand(platform)
+		command = claudeSkillRegistryCommand
 	default:
 		return Result{}, nil
 	}
@@ -118,31 +64,17 @@ func installSkillRegistry(homeDir string, adapter agents.Adapter, platform strin
 	if _, exists := hooks[event]; exists && !ok {
 		return Result{}, fmt.Errorf("hook settings %q has unsupported hooks.%s shape: want array", path, event)
 	}
-	pruned := false
-	if adapter.Agent() == model.AgentClaudeCode && platform == "windows" {
-		entries, pruned = pruneClaudeLegacySkillRegistryHooks(entries)
-		if pruned {
-			if len(entries) == 0 {
-				delete(hooks, event)
-			} else {
-				hooks[event] = entries
-			}
-		}
-	}
 	if claudeHookListContains(entries, command) {
-		if !pruned {
-			return Result{Files: []string{path}}, nil
-		}
-	} else {
-		hook := map[string]any{"type": "command", "command": command}
-		entry := map[string]any{"matcher": "", "hooks": []any{hook}}
-		if adapter.Agent() == model.AgentCodex {
-			entry["matcher"] = "startup|resume|clear|compact"
-			hook["timeout"] = 30
-			hook["statusMessage"] = "Refreshing skill registry"
-		}
-		hooks[event] = append(entries, entry)
+		return Result{Files: []string{path}}, nil
 	}
+	hook := map[string]any{"type": "command", "command": command}
+	entry := map[string]any{"matcher": "", "hooks": []any{hook}}
+	if adapter.Agent() == model.AgentCodex {
+		entry["matcher"] = "startup|resume|clear|compact"
+		hook["timeout"] = 30
+		hook["statusMessage"] = "Refreshing skill registry"
+	}
+	hooks[event] = append(entries, entry)
 	out, err := encodeHookSettings(data, root, hooks)
 	if err != nil {
 		return Result{}, fmt.Errorf("rewrite hook settings %q: %w", path, err)

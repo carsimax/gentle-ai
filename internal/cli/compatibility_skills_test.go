@@ -4,7 +4,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -105,26 +104,6 @@ func TestCompatibilitySkillsRefreshRemovesLegacySharedSkillMarker(t *testing.T) 
 	}
 }
 
-func TestWindowsCompatibilityTransactionKeepsAnchoredRollbackWithoutSDDInjection(t *testing.T) {
-	_, testFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-	sourcePath := filepath.Join(filepath.Dir(testFile), "compatibility_transaction_windows.go")
-	source, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", sourcePath, err)
-	}
-
-	if strings.Contains(string(source), "sdd.InjectSkillDirectoryWithCompatibilityWriter") {
-		t.Fatal("Windows compatibility transaction still injects SDD skills")
-	}
-	const rollbackRemoval = "if _, err := t.writer.Remove(path); err != nil {"
-	if !strings.Contains(string(source), rollbackRemoval) {
-		t.Fatalf("Windows compatibility transaction does not consume the anchored remover changed-state result: missing %q", rollbackRemoval)
-	}
-}
-
 func TestRunSyncDryRunMatchesZeroAgentCompatibilityRefresh(t *testing.T) {
 	home := t.TempDir()
 	setSyncTestHome(t, home)
@@ -194,9 +173,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 		{name: "parent symlink", linkParent: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" {
-				t.Skip("symlink creation may require elevated privileges")
-			}
 			home, target := t.TempDir(), t.TempDir()
 			targetSkills := target
 			if tc.linkParent {
@@ -231,9 +207,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 		{name: "ordinary descendant symlink", components: []model.ComponentID{model.ComponentSkills}, link: "go-testing"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if runtime.GOOS == "windows" {
-				t.Skip("symlink creation may require elevated privileges")
-			}
 			home, target := t.TempDir(), t.TempDir()
 			skillsDir := filepath.Join(home, ".agents", "skills")
 			if err := os.MkdirAll(skillsDir, 0o755); err != nil {
@@ -255,9 +228,6 @@ func TestCompatibilitySkillsRefreshRequiresPhysicalDirectory(t *testing.T) {
 }
 
 func TestCompatibilityRefreshDoesNotFollowParentSwappedAfterValidation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation may require elevated privileges")
-	}
 
 	home, outside := t.TempDir(), t.TempDir()
 	skillsDir := filepath.Join(home, ".agents", "skills")

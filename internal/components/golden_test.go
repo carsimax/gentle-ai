@@ -199,7 +199,6 @@ func TestGoldenPersona_Windsurf_Gentleman(t *testing.T) {
 func TestGoldenPersona_Kiro_Gentleman(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 
 	adapter := kiroAdapter()
 	result, err := persona.Inject(home, adapter, model.PersonaGentleman)
@@ -285,7 +284,6 @@ func TestGoldenEngram_Windsurf(t *testing.T) {
 func TestGoldenEngram_Kiro(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 
 	engram.SetLookPathForTest(t, "/opt/homebrew/bin/engram", "")
 
@@ -397,7 +395,6 @@ func TestGoldenSkills_Windsurf(t *testing.T) {
 func TestGoldenSkills_Kiro(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 
 	adapter := kiroAdapter()
 	skillIDs := []model.SkillID{model.SkillGoTesting, model.SkillCreator}

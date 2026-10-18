@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -88,13 +87,7 @@ var (
 	installCommunityToolWithHome = communitytool.InstallWithHome
 	injectInstallPersona         = defaultInjectInstallPersona
 	injectSyncPersona            = defaultInjectSyncPersona
-	pathEnvEntries               = func(profile system.PlatformProfile) []string {
-		return splitPathForOS(os.Getenv("PATH"), profile.OS)
-	}
-	addUserPath          = system.AddToUserPath
-	ensureUserPathFirst  = system.PrioritizeUserPath
-	userPathEntries      = system.UserPathEntries
-	cleanupGGAInstallDir = gga.CleanupInstallDir
+	addUserPath                  = system.AddToUserPath
 
 	// ggaAvailableCheck is an optional override for ggaAvailable behavior.
 	// When set, it is called instead of the default filesystem check.
@@ -104,8 +97,8 @@ var (
 	// Package-level var for testability — tests can replace this to avoid real HTTP calls.
 	// Always uses the stable (release) path; beta channel at install time is handled
 	// separately via installBetaEngramFromMain.
-	engramDownloadFn = func(profile system.PlatformProfile) (string, error) {
-		return engram.DownloadLatestBinary(profile, false)
+	engramDownloadFn = func(system.PlatformProfile) (string, error) {
+		return engram.DownloadLatestBinary(false)
 	}
 
 	// verifyEngramVersion resolves the installed engram binary version, threaded
@@ -592,7 +585,7 @@ func runnableAgentCommands(agentIDs []model.AgentID) []string {
 }
 
 // withGoInstallPathNote appends a PATH guidance note when engram was installed
-// on a non-brew platform (Linux/Windows). Since engram is now installed via
+// without Homebrew. Since engram is now installed via
 // direct binary download to /usr/local/bin or ~/.local/bin, this note helps
 // users who may need to add the install directory to their PATH.
 func withGoInstallPathNote(report verify.Report, resolved planner.ResolvedPlan) verify.Report {
@@ -697,11 +690,7 @@ func installBetaEngramFromMain() (string, error) {
 		return "", fmt.Errorf("resolve go install bin dir: %w", err)
 	}
 
-	binaryName := "engram"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-	binaryPath := filepath.Join(binDir, binaryName)
+	binaryPath := filepath.Join(binDir, "engram")
 	if err := prependToPath(binDir); err != nil {
 		return "", err
 	}
@@ -1369,7 +1358,7 @@ func OpenCodeSDKInstallProposal(homeDir string) (*OpenCodeSDKConsent, error) {
 		} else if manager == "" {
 			manager = "npm"
 		}
-		return nil, fmt.Errorf("automatic OpenCode SDK install refused: %w; OpenCode V2 requires %s; run `%s` manually, then retry Gentle AI%s", err, openCodeSDKRequirement(config, dependency), openCodeSDKInstallContinuation(runtime.GOOS, config, manager, dependency), openCodeSDKPeerConflictHint(runtime.GOOS, config, manager, dependency))
+		return nil, fmt.Errorf("automatic OpenCode SDK install refused: %w; OpenCode V2 requires %s; run `%s` manually, then retry Gentle AI%s", err, openCodeSDKRequirement(config, dependency), openCodeSDKInstallContinuation(config, manager, dependency), openCodeSDKPeerConflictHint(config, manager, dependency))
 	}
 	executable, err := cmdLookPath("npm")
 	if err != nil {
@@ -1381,7 +1370,7 @@ func OpenCodeSDKInstallProposal(homeDir string) (*OpenCodeSDKConsent, error) {
 	}
 	if blocker := openCodeSDKIsolationBlocker(executable, physicalExe); blocker != "" {
 		// refusal:by-design world-action: credential isolation stays mandatory, so a manager that needs the user's shell environment runs manually
-		return nil, fmt.Errorf("automatic OpenCode SDK install refused: npm on PATH %s and cannot run in the credential-isolated installer environment; run `%s` manually in your normal shell, then retry Gentle AI", blocker, openCodeSDKInstallContinuation(runtime.GOOS, config, "npm", dependency))
+		return nil, fmt.Errorf("automatic OpenCode SDK install refused: npm on PATH %s and cannot run in the credential-isolated installer environment; run `%s` manually in your normal shell, then retry Gentle AI", blocker, openCodeSDKInstallContinuation(config, "npm", dependency))
 	}
 	exeDigest, err := openCodeSDKExecutableDigest(physicalExe)
 	if err != nil {
@@ -1469,16 +1458,6 @@ func openCodeSDKPhysicalTarget(path string, directory bool) (string, os.FileInfo
 	if !directory && !info.Mode().IsRegular() {
 		// refusal:by-design operator-knowledge: package manager executable cannot be identified
 		return "", nil, fmt.Errorf("package manager is not a regular executable")
-	}
-	// On Windows os.Stat records only the path and reads the volume serial and
-	// file index on the first os.SameFile call. Left lazy, the identity approved
-	// at proposal time would be read from whatever occupies the path at launch,
-	// so a replaced executable or config directory would compare equal to
-	// itself. Comparing the result with itself loads and caches the identity
-	// now; on POSIX the device and inode are already captured and this holds.
-	if !os.SameFile(info, info) {
-		// refusal:by-design operator-knowledge: a target whose file identity cannot be read cannot be pinned for consent
-		return "", nil, fmt.Errorf("package manager target identity cannot be read")
 	}
 	return physical, info, nil
 }
@@ -1631,17 +1610,13 @@ func (s openCodePluginDependencyPreflightStep) Run() error {
 		}
 		if !openCodeSDKInstalled(config, dependency) {
 			// refusal:by-design world-action: the external manager did not materialize the requested package
-			return fmt.Errorf("%s SDK install verification failed: %s completed without materializing %s in %s; package-manager changes are not covered by Gentle AI rollback; run `%s` manually in your normal shell, then retry", proposal.Manager, proposal.Manager, dependency, config, openCodeSDKInstallContinuation(runtime.GOOS, config, proposal.Manager, dependency))
+			return fmt.Errorf("%s SDK install verification failed: %s completed without materializing %s in %s; package-manager changes are not covered by Gentle AI rollback; run `%s` manually in your normal shell, then retry", proposal.Manager, proposal.Manager, dependency, config, openCodeSDKInstallContinuation(config, proposal.Manager, dependency))
 		}
 		return nil
 	}
 	requirement := openCodeSDKRequirement(config, dependency)
 	if err := openCodeSDKCheckProjectConfig(config); err == nil {
-		location := openCodeSDKInstallContinuation(runtime.GOOS, config, "npm", dependency)
-		if runtime.GOOS == "windows" {
-			// refusal:by-design world-action: PowerShell must run the displayed manual install
-			return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; in PowerShell run: %s; then retry Gentle AI", requirement, location)
-		}
+		location := openCodeSDKInstallContinuation(config, "npm", dependency)
 		// refusal:by-design world-action: the operator must run the displayed manual install
 		return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; run `%s`, then retry Gentle AI", requirement, location)
 	}
@@ -1660,12 +1635,8 @@ func (s openCodePluginDependencyPreflightStep) Run() error {
 	if manager == "bun" {
 		return openCodeSDKManualBunError(config, dependency)
 	}
-	location := openCodeSDKInstallContinuation(runtime.GOOS, config, manager, dependency)
-	hint := openCodeSDKPeerConflictHint(runtime.GOOS, config, manager, dependency)
-	if runtime.GOOS == "windows" {
-		// refusal:by-design world-action: this command is generated for PowerShell, not cmd.exe
-		return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; in PowerShell run: %s; then retry Gentle AI%s", requirement, location, hint)
-	}
+	location := openCodeSDKInstallContinuation(config, manager, dependency)
+	hint := openCodeSDKPeerConflictHint(config, manager, dependency)
 	// refusal:by-design world-action: the runnable package-manager command is selected from the user's package ownership and quoted config path at runtime
 	return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; run `%s`, then retry Gentle AI%s", requirement, location, hint)
 }
@@ -1675,7 +1646,7 @@ func (s openCodePluginDependencyPreflightStep) Run() error {
 // V2 SDK, so the pinned npm install stops with ERESOLVE. --legacy-peer-deps
 // and uninstalling the V1 SDK both prune that peer tree, which existing TUI
 // plugins still load; --force overrides the conflict and keeps it.
-func openCodeSDKPeerConflictHint(goos, config, manager, dependency string) string {
+func openCodeSDKPeerConflictHint(config, manager, dependency string) string {
 	if manager != "npm" {
 		return ""
 	}
@@ -1685,12 +1656,7 @@ func openCodeSDKPeerConflictHint(goos, config, manager, dependency string) strin
 	// #5208 evidence: --force accepts the optional @opentui/core peer
 	// mismatch and removed no packages, while --legacy-peer-deps and removing
 	// the V1 SDK both prune the @opentui tree that existing TUI plugins load.
-	force := openCodeSDKCommandIn(goos, config, "npm install --save-exact --force --no-audit --no-fund "+dependency)
-	if goos == "windows" {
-		force = "PowerShell: " + force
-	} else {
-		force = "`" + force + "`"
-	}
+	force := "`" + openCodeSDKCommandIn(config, "npm install --save-exact --force --no-audit --no-fund "+dependency) + "`"
 	return "; if npm stops with ERESOLVE, the cause is the OpenCode V1 SDK @opencode-ai/plugin still installed there: its peer-installed @opentui packages conflict with the optional @opentui/core peer of @opencode/plugin. Rerun the install with --force, which overrides the peer conflict and does not prune peer packages (#5208): " + force + ". Do not use --legacy-peer-deps or uninstall @opencode-ai/plugin: both prune the peer-installed @opentui and solid-js packages that existing OpenCode TUI plugins load"
 }
 
@@ -1714,11 +1680,7 @@ func openCodeSDKManualBunOwner(config string) bool {
 }
 
 func openCodeSDKManualBunError(config, dependency string) error {
-	location := openCodeSDKInstallContinuation(runtime.GOOS, config, "bun", dependency)
-	if runtime.GOOS == "windows" {
-		// refusal:by-design world-action: Bun-owned packages require an operator-run PowerShell continuation
-		return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; Bun-owned packages cannot be provisioned automatically; in PowerShell run: %s; then retry Gentle AI", openCodeSDKRequirement(config, dependency), location)
-	}
+	location := openCodeSDKInstallContinuation(config, "bun", dependency)
 	// refusal:by-design world-action: Bun-owned packages require an operator-run continuation
 	return fmt.Errorf("OpenCode V2 requires %s before managed plugins can be written; Bun-owned packages cannot be provisioned automatically; run `%s`, then retry Gentle AI", openCodeSDKRequirement(config, dependency), location)
 }
@@ -1748,7 +1710,7 @@ func openCodeSDKRunApprovedManager(proposal *OpenCodeSDKConsent) error {
 		return fmt.Errorf("OpenCode package manager executable changed before launch; review it again and retry")
 	}
 	if err := openCodeSDKCheckProjectConfig(proposal.ConfigDir); err != nil {
-		return fmt.Errorf("automatic OpenCode SDK install refused: %w; run `%s` manually, then retry Gentle AI", err, openCodeSDKInstallContinuation(runtime.GOOS, proposal.ConfigDir, proposal.Manager, proposal.Dependency))
+		return fmt.Errorf("automatic OpenCode SDK install refused: %w; run `%s` manually, then retry Gentle AI", err, openCodeSDKInstallContinuation(proposal.ConfigDir, proposal.Manager, proposal.Dependency))
 	}
 	state, err := openCodeSDKPackageState(proposal.ConfigDir)
 	if err != nil || state != proposal.stateSignature {
@@ -1764,7 +1726,7 @@ func openCodeSDKRunApprovedManager(proposal *OpenCodeSDKConsent) error {
 		return fmt.Errorf("OpenCode SDK config directory changed before launch; review it again and retry")
 	}
 	if err := openCodeSDKCheckProjectConfig(proposal.ConfigDir); err != nil {
-		return fmt.Errorf("automatic OpenCode SDK install refused: %w; run `%s` manually, then retry Gentle AI", err, openCodeSDKInstallContinuation(runtime.GOOS, proposal.ConfigDir, proposal.Manager, proposal.Dependency))
+		return fmt.Errorf("automatic OpenCode SDK install refused: %w; run `%s` manually, then retry Gentle AI", err, openCodeSDKInstallContinuation(proposal.ConfigDir, proposal.Manager, proposal.Dependency))
 	}
 	isolated, err := os.MkdirTemp("", "gentle-ai-opencode-sdk-")
 	if err != nil {
@@ -1785,7 +1747,7 @@ func openCodeSDKRunApprovedManager(proposal *OpenCodeSDKConsent) error {
 	// Never reflect raw command errors or output: both may embed credentials.
 	// Only the failure class (start, exit code, signal, deadline) is reported.
 	// refusal:by-design world-action: package manager failed without exposing its possibly sensitive output
-	return fmt.Errorf("%s SDK install failed: %s %s; package-manager changes are not covered by Gentle AI rollback; run `%s` manually in your normal shell, then retry", proposal.Manager, proposal.Manager, openCodeSDKFailureClass(err, ctx.Err(), openCodeSDKInstallTimeout), openCodeSDKInstallContinuation(runtime.GOOS, proposal.ConfigDir, proposal.Manager, proposal.Dependency))
+	return fmt.Errorf("%s SDK install failed: %s %s; package-manager changes are not covered by Gentle AI rollback; run `%s` manually in your normal shell, then retry", proposal.Manager, proposal.Manager, openCodeSDKFailureClass(err, ctx.Err(), openCodeSDKInstallTimeout), openCodeSDKInstallContinuation(proposal.ConfigDir, proposal.Manager, proposal.Dependency))
 }
 
 func openCodeSDKIsolatedEnv(isolated string, proposal *OpenCodeSDKConsent) []string {
@@ -1800,26 +1762,20 @@ func openCodeSDKIsolatedEnv(isolated string, proposal *OpenCodeSDKConsent) []str
 		"NPM_CONFIG_REGISTRY=" + openCodeSDKRegistry,
 		"CI=true", "NO_COLOR=1",
 	}
-	if runtime.GOOS == "windows" {
-		env = append(env, "SystemRoot="+os.Getenv("SystemRoot"))
-	}
 	return env
 }
 
 // The continuation pins the minimum exactly, so a later routine install or
 // update in that directory cannot float it.
-func openCodeSDKInstallContinuation(goos, config, manager, dependency string) string {
+func openCodeSDKInstallContinuation(config, manager, dependency string) string {
 	arguments := "bun add --exact " + dependency
 	if manager == "npm" {
 		arguments = "npm install --save-exact --no-audit --no-fund " + dependency
 	}
-	return openCodeSDKCommandIn(goos, config, arguments)
+	return openCodeSDKCommandIn(config, arguments)
 }
 
-func openCodeSDKCommandIn(goos, config, arguments string) string {
-	if goos == "windows" {
-		return "Set-Location -LiteralPath '" + strings.ReplaceAll(config, "'", "''") + "'; if ($?) { " + arguments + " }"
-	}
+func openCodeSDKCommandIn(config, arguments string) string {
 	return "cd " + shellQuoteOpenCodePluginPath(config) + " && " + arguments
 }
 
@@ -3022,63 +2978,6 @@ func resolveAdapters(agentIDs []model.AgentID) []agents.Adapter {
 	return adapters
 }
 
-func shouldRefreshWindowsEngram(profile system.PlatformProfile, resolvedPath string, pathEntries []string) bool {
-	if profile.OS != "windows" || profile.PackageManager == "brew" || strings.TrimSpace(resolvedPath) == "" {
-		return false
-	}
-	return len(engramBinaryDirsOnPath(pathEntries, profile.OS)) > 1
-}
-
-func ensureRepairableWindowsEngramShadowing(profile system.PlatformProfile, installedPath, managedDir string) error {
-	userEntries, err := userPathEntries(profile.OS)
-	if err != nil {
-		return fmt.Errorf("read user PATH: %w", err)
-	}
-
-	staleDir := filepath.Dir(installedPath)
-	if !pathEntriesContainDir(userEntries, staleDir) {
-		return fmt.Errorf("%s is not in the user PATH, so user-scoped PATH repair cannot guarantee future shells will resolve %s before %s", staleDir, managedDir, staleDir)
-	}
-
-	return nil
-}
-
-func pathEntriesContainDir(entries []string, dir string) bool {
-	dir = strings.Trim(strings.TrimSpace(dir), `"`)
-	if dir == "" {
-		return false
-	}
-	for _, entry := range entries {
-		entry = strings.Trim(strings.TrimSpace(entry), `"`)
-		if entry == "" {
-			continue
-		}
-		if strings.EqualFold(filepath.Clean(entry), filepath.Clean(dir)) {
-			return true
-		}
-	}
-	return false
-}
-
-func engramBinaryDirsOnPath(pathEntries []string, goos string) []string {
-	var dirs []string
-	for _, entry := range pathEntries {
-		entry = strings.Trim(strings.TrimSpace(entry), `"`)
-		if entry == "" {
-			continue
-		}
-		binaryName := "engram"
-		if goos == "windows" {
-			binaryName = "engram.exe"
-		}
-		candidate := filepath.Join(entry, binaryName)
-		if _, err := os.Stat(candidate); err == nil {
-			dirs = append(dirs, entry)
-		}
-	}
-	return dirs
-}
-
 func resolveEngramVersion(command string) (string, error) {
 	if strings.TrimSpace(command) == "" || command == "engram" {
 		return verifyEngramVersion()
@@ -3091,17 +2990,6 @@ func resolveEngramProtocolFlag(ctx context.Context, command string) (string, err
 		return probeEngramProtocolFlag(ctx)
 	}
 	return probeEngramProtocolFlagCommand(ctx, command)
-}
-
-func splitPathForOS(value, goos string) []string {
-	separator := string(os.PathListSeparator)
-	if goos == "windows" {
-		separator = ";"
-	}
-	if value == "" {
-		return nil
-	}
-	return strings.Split(value, separator)
 }
 
 func (s componentApplyStep) Run() error {
@@ -3124,7 +3012,7 @@ func (s componentApplyStep) Run() error {
 		} else if installedPath, found := resolveEngramInstalledPath(s.profile); !found {
 			// Engram not on PATH — install it.
 			if s.profile.PackageManager == "brew" {
-				// macOS (or Linux with Homebrew): use brew tap + brew install.
+				// macOS: use brew tap + brew install.
 				commands, err := engram.InstallCommand(s.profile)
 				if err != nil {
 					return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
@@ -3137,13 +3025,12 @@ func (s componentApplyStep) Run() error {
 					}
 				}
 			} else if binaryPath, err := engramDownloadFn(s.profile); err != nil {
-				// Linux / Windows: download the pre-built binary from GitHub Releases.
+				// Without Homebrew: download the pre-built binary from GitHub Releases.
 				// No Go required — engram ships pre-built binaries.
 				installErr = fmt.Errorf("download engram binary: %w", err)
 			} else {
 				// Add the install directory to PATH so subsequent commands
 				// (engram setup, engram.Inject → resolveEngramCommand) can find it.
-				// On Windows this also persists the change to the user registry via PowerShell.
 				binDir := filepath.Dir(binaryPath)
 				if err := addUserPath(binDir); err != nil {
 					// Non-fatal: warn but continue — the binary was downloaded successfully.
@@ -3167,20 +3054,6 @@ func (s componentApplyStep) Run() error {
 				}
 				return nil
 			}
-		} else if shouldRefreshWindowsEngram(s.profile, installedPath, pathEnvEntries(s.profile)) {
-			binaryPath, err := engramDownloadFn(s.profile)
-			if err != nil {
-				return fmt.Errorf("refresh shadowed engram binary: %w", err)
-			}
-			engramCommand = binaryPath
-			binDir := filepath.Dir(binaryPath)
-			if err := ensureRepairableWindowsEngramShadowing(s.profile, installedPath, binDir); err != nil {
-				return fmt.Errorf("repair Windows Engram PATH shadowing: refreshed managed Engram at %s, but cannot safely repair PATH order: %w. Move %s before %s in your user PATH or remove the stale Machine/System PATH entry, then rerun install", binaryPath, err, binDir, filepath.Dir(installedPath))
-			}
-			if err := ensureUserPathFirst(binDir); err != nil {
-				return fmt.Errorf("repair Windows Engram PATH shadowing: refreshed managed Engram at %s, but could not move %s ahead of stale PATH entry %s: %w. Move %s before %s in your user PATH, then rerun install", binaryPath, binDir, installedPath, err, binDir, filepath.Dir(installedPath))
-			}
-			fmt.Fprintf(os.Stderr, "WARNING: multiple engram.exe entries were found on PATH and %s resolved first. Refreshed managed Engram at %s and moved %s ahead of the stale entry in the user PATH.\n", installedPath, binaryPath, binDir)
 		} else {
 			engramCommand = installedPath
 		}
@@ -3358,11 +3231,6 @@ func (s componentApplyStep) Run() error {
 	case model.ComponentGGA:
 		if !ggaAvailable(s.profile) {
 			// GGA not found on any known PATH — install it.
-			if s.profile.OS == "windows" {
-				if err := cleanupGGAInstallDir(); err != nil {
-					return err
-				}
-			}
 			commands, err := gga.InstallCommand(s.profile)
 			if err != nil {
 				return fmt.Errorf("resolve install command for component %q: %w", s.component, err)
@@ -3385,21 +3253,6 @@ func (s componentApplyStep) Run() error {
 		}
 		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
 			return fmt.Errorf("ensure gga runtime assets: %w", err)
-		}
-		if runtime.GOOS == "windows" {
-			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
-				return fmt.Errorf("ensure gga powershell shim: %w", err)
-			}
-			if err := gga.EnsureCommandShim(s.homeDir); err != nil {
-				return fmt.Errorf("ensure gga command shim: %w", err)
-			}
-			// Add GGA bin dir to the user PATH persistently on Windows.
-			// GGA's install.sh drops the binary into ~/bin which is not on PATH by default.
-			ggaBinDir := filepath.Join(s.homeDir, "bin")
-			if err := addUserPath(ggaBinDir); err != nil {
-				// Non-fatal: warn but continue — GGA was installed successfully.
-				fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", ggaBinDir, err)
-			}
 		}
 		if _, err := gga.Inject(s.homeDir, s.agents); err != nil {
 			return fmt.Errorf("inject gga config: %w", err)
@@ -3438,41 +3291,12 @@ func (s componentApplyStep) Run() error {
 	}
 }
 
-func ensureGoAvailableAfterInstall(profile system.PlatformProfile) error {
+func ensureGoAvailableAfterInstall(_ system.PlatformProfile) error {
 	if _, err := cmdLookPath("go"); err == nil {
 		return nil
 	}
 
-	if profile.OS != "windows" {
-		return fmt.Errorf("go was installed but is still not available in PATH")
-	}
-
-	for _, candidate := range windowsGoCandidates() {
-		if candidate == "" {
-			continue
-		}
-		if _, err := osStat(candidate); err == nil {
-			binDir := filepath.Dir(candidate)
-			currentPath := os.Getenv("PATH")
-			if currentPath == "" {
-				return osSetenv("PATH", binDir)
-			}
-			return osSetenv("PATH", binDir+string(os.PathListSeparator)+currentPath)
-		}
-	}
-
-	return fmt.Errorf("go was installed but is still not available in PATH; restart the terminal and retry")
-}
-
-func windowsGoCandidates() []string {
-	programFiles := os.Getenv("ProgramFiles")
-	programFilesX86 := os.Getenv("ProgramFiles(x86)")
-
-	return []string{
-		filepath.Join(programFiles, "Go", "bin", "go.exe"),
-		filepath.Join(programFilesX86, "Go", "bin", "go.exe"),
-		`C:\Program Files\Go\bin\go.exe`,
-	}
+	return fmt.Errorf("go was installed but is still not available in PATH")
 }
 
 // The seam lets native tests add a post-publication failure while still using
@@ -3559,8 +3383,8 @@ func ResolveInstallProfile(detection system.DetectionResult) system.PlatformProf
 }
 
 // ggaAvailable reports whether the gga binary is reachable. gga is often
-// installed to ~/.local/bin (the default for install.sh on Linux and macOS)
-// or ~/bin (the default for install.sh on Windows), which may not be on PATH.
+// installed to ~/.local/bin (the default for install.sh on macOS), which may
+// not be on PATH.
 // On macOS with Homebrew, gga may be in /opt/homebrew/bin or /usr/local/bin.
 // We check the filesystem directly to avoid spawning a subprocess and to work
 // regardless of whether the install directory has been added to PATH.
@@ -3592,11 +3416,6 @@ func ggaAvailable(profile system.PlatformProfile) bool {
 			}
 		}
 	}
-	if profile.OS == "windows" {
-		if _, err := osStat(filepath.Join(homeDir, "bin", "gga")); err == nil {
-			return true
-		}
-	}
 	return false
 }
 
@@ -3605,12 +3424,6 @@ func isExecutableFile(path string) bool {
 	if err != nil || !info.Mode().IsRegular() {
 		return false
 	}
-	// Windows has no POSIX executable permission bit (os.FileMode.Perm()
-	// never carries 0o111 there), so a regular file at a known binary path
-	// is treated as usable without a permission check.
-	if runtime.GOOS == "windows" {
-		return true
-	}
 	return info.Mode().Perm()&0o111 != 0
 }
 
@@ -3618,7 +3431,6 @@ func standardHomebrewExecutable(name string) (string, bool) {
 	for _, binDir := range []string{
 		"/opt/homebrew/bin",
 		"/usr/local/bin",
-		"/home/linuxbrew/.linuxbrew/bin",
 	} {
 		path := filepath.Join(binDir, name)
 		if isExecutableFile(path) {
@@ -3940,7 +3752,7 @@ func installBackupTargets(homeDir, workspaceDir string, scope InstallScope, sele
 		}
 	}
 	if containsAgent(resolved.Agents, model.AgentOpenCode) {
-		for _, path := range opencodeactivation.LauncherPaths(homeDir, runtime.GOOS) {
+		for _, path := range opencodeactivation.LauncherPaths(homeDir) {
 			paths[path] = struct{}{}
 		}
 	}

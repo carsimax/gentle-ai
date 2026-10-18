@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -210,9 +209,6 @@ func (s failAfterOpenCodeSettingsStep) Run() error {
 }
 
 func TestInstallOpenCodeSettingsWritersRollbackSelectedJSONC(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX mode assertions do not apply on Windows")
-	}
 	for _, component := range []model.ComponentID{model.ComponentPersona, model.ComponentPermission, model.ComponentContext7} {
 		t.Run(string(component), func(t *testing.T) {
 			home, workspace, selected, decoy, before := themeSettingsFixture(t)
@@ -268,9 +264,6 @@ func (s failAfterThemeStep) Run() error {
 }
 
 func TestInstallThemeRollbackRestoresSelectedJSONCBytesAndMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows does not preserve POSIX file modes")
-	}
 	home, workspace, selected, decoy, before := themeSettingsFixture(t)
 	selection := model.Selection{Agents: []model.AgentID{model.AgentOpenCode}, Components: []model.ComponentID{model.ComponentTheme}}
 	resolved := planner.ResolvedPlan{Agents: selection.Agents, OrderedComponents: selection.Components}
@@ -337,9 +330,6 @@ func TestOpenCodeTelemetryRollbackPreservesLateEdits(t *testing.T) {
 					home := t.TempDir()
 					setOpenCodeTestHome(t, home)
 					t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-					if edit == "mode" && runtime.GOOS == "windows" {
-						t.Skip("Windows does not preserve POSIX chmod mode mutations")
-					}
 					adapter := opencode.NewAdapter()
 					config := adapter.GlobalConfigDir(home)
 					paths := telemetryruntime.ManagedPaths(config)
@@ -491,9 +481,6 @@ func fmtRollbackCase(flow string, existing bool, edit string) string {
 func setOpenCodeTestHome(t *testing.T, home string) {
 	t.Helper()
 	t.Setenv("HOME", home)
-	if runtime.GOOS == "windows" {
-		t.Setenv("USERPROFILE", home)
-	}
 }
 
 func TestInstallV2SDKPreflightBeforeManagedRuntimeWrites(t *testing.T) {
@@ -583,9 +570,6 @@ func TestInstallV2SDKPreflightBeforeManagedRuntimeWrites(t *testing.T) {
 }
 
 func TestV2SDKPreflightNamesInstalledPackageManagerContinuation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX shell execution of the displayed continuation")
-	}
 	home := filepath.Join(t.TempDir(), "home with ' quote")
 	if err := os.MkdirAll(home, 0755); err != nil {
 		t.Fatal(err)
@@ -1246,45 +1230,6 @@ func TestV2SDKProposalRefusesNonPublicDependencySources(t *testing.T) {
 				t.Fatalf("unsafe dependency source proposal = %+v, %v", proposal, err)
 			}
 		})
-	}
-}
-
-func TestOpenCodeV2SDKWindowsPowerShellContinuation(t *testing.T) {
-	config := filepath.Join(t.TempDir(), "path with ' quote %SDK_PREFLIGHT_MARKER%")
-	if err := os.MkdirAll(config, 0755); err != nil {
-		t.Fatal(err)
-	}
-	command := openCodeSDKInstallContinuation("windows", config, "npm", "@opencode/plugin@2.0.4")
-	if strings.Contains(command, "cd /d") || !strings.Contains(command, "Set-Location -LiteralPath") || !strings.Contains(command, "path with '' quote %SDK_PREFLIGHT_MARKER%'") {
-		t.Fatalf("unsafe or non-PowerShell continuation: %s", command)
-	}
-	if _, err := exec.LookPath("pwsh"); err != nil {
-		t.Skip("PowerShell is unavailable for executable continuation check")
-	}
-	if testing.Short() {
-		t.Skip("PowerShell execution is an external integration check")
-	}
-	marker := filepath.Join(t.TempDir(), "invoked")
-	t.Setenv("SDK_PREFLIGHT_MARKER", marker)
-	definition := "function npm { Set-Content -LiteralPath $env:SDK_PREFLIGHT_MARKER -Value ((Get-Location).Path + '|' + ($args -join ' ')) }\n"
-	output, err := exec.Command("pwsh", "-NoProfile", "-Command", definition+command).CombinedOutput()
-	if err != nil {
-		t.Fatalf("PowerShell continuation failed: %v: %s", err, output)
-	}
-	data, err := os.ReadFile(marker)
-	if err != nil {
-		t.Fatalf("PowerShell did not write the marker: %v", err)
-	}
-	// PowerShell reports the long path while t.TempDir() may use an 8.3 short
-	// name (C:\Users\RUNNER~1), so compare directory identity, not bytes.
-	dir, args, found := strings.Cut(strings.TrimSpace(string(data)), "|")
-	if !found || args != "install --save-exact --no-audit --no-fund @opencode/plugin@2.0.4" {
-		t.Fatalf("PowerShell ran the wrong command: %q", data)
-	}
-	want, wantErr := os.Stat(config)
-	got, gotErr := os.Stat(dir)
-	if wantErr != nil || gotErr != nil || !os.SameFile(want, got) {
-		t.Fatalf("PowerShell did not run in target directory: %q, %v, %v", data, wantErr, gotErr)
 	}
 }
 

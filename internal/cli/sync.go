@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -886,7 +885,7 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 		}
 	}
 	if !workspace && containsAgent(selection.Agents, model.AgentOpenCode) {
-		for _, path := range opencodeactivation.LauncherPaths(homeDir, runtime.GOOS) {
+		for _, path := range opencodeactivation.LauncherPaths(homeDir) {
 			paths[path] = struct{}{}
 		}
 	}
@@ -1540,11 +1539,6 @@ func (s componentSyncStep) Run() error {
 		// NO binary install.
 		if err := gga.EnsureRuntimeAssets(s.homeDir); err != nil {
 			return fmt.Errorf("sync gga runtime assets: %w", err)
-		}
-		if runtime.GOOS == "windows" {
-			if err := gga.EnsurePowerShellShim(s.homeDir); err != nil {
-				return fmt.Errorf("ensure gga powershell shim: %w", err)
-			}
 		}
 		res, err := gga.Inject(s.homeDir, s.agents)
 		if err != nil {
@@ -2516,7 +2510,7 @@ func restorePersistedCommunityTools(homeDir string, selection *model.Selection, 
 func hasManagedPiCodeGraphManifest(homeDir string) bool {
 	path := communitytool.PiCodeGraphManifestPath(homeDir)
 	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return false
 	}
 	data, err := os.ReadFile(path)

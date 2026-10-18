@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/opencode"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
+
+	"github.com/gentleman-programming/gentle-ai/v4/internal/opencode"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/mutationjournal"
@@ -30,21 +30,9 @@ var approvedPriorPluginDigests = map[string]struct{}{
 	priorPluginDigestA9cab7dd: {},
 }
 
-// Windows exposes writable regular files as 0666 regardless of the requested
-// POSIX permission bits. Retain exact modes elsewhere and never equate a
-// read-only file with a writable managed file.
+// managedModeMatches requires the exact managed file mode.
 func managedModeMatches(expected, observed os.FileMode) bool {
-	return managedModeMatchesForOS(runtime.GOOS, expected, observed)
-}
-
-func managedModeMatchesForOS(goos string, expected, observed os.FileMode) bool {
-	if expected == observed {
-		return true
-	}
-	return goos == "windows" &&
-		expected.Perm()&0222 != 0 &&
-		observed.Perm() == 0666 &&
-		expected&^os.ModePerm == observed&^os.ModePerm
+	return expected == observed
 }
 
 type managedManifest struct {

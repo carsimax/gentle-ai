@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -100,9 +99,6 @@ func openCodeV2HostE2EInputs(t *testing.T) openCodeV2HostInputs {
 	t.Helper()
 	if testing.Short() || os.Getenv("GENTLE_AI_REAL_OPENCODE") == "" {
 		t.Skip("opt in with GENTLE_AI_REAL_OPENCODE, GENTLE_AI_REAL_PYTHON, GENTLE_AI_REAL_OPENCODE_SDK, GENTLE_AI_APPROVED_TMPDIR, and TMPDIR equal to that approved root")
-	}
-	if runtime.GOOS != "darwin" {
-		t.Fatal("real OpenCode V2 host E2E requires macOS sandbox-exec network denial")
 	}
 	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
 		t.Fatal(err)

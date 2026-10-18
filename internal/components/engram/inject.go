@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
@@ -1438,11 +1437,7 @@ func isEngramCommand(cmd string) bool {
 	if cmd == "" {
 		return false
 	}
-	base := filepath.Base(cmd)
-	if runtime.GOOS == "windows" {
-		return strings.EqualFold(base, "engram.exe") || strings.EqualFold(base, "engram")
-	}
-	return base == "engram"
+	return filepath.Base(cmd) == "engram"
 }
 
 func isVersionedHomebrewCellarPath(path string) bool {
@@ -1453,7 +1448,7 @@ func isVersionedHomebrewCellarPath(path string) bool {
 func isStableHomebrewEngramPath(path string) bool {
 	clean := filepath.ToSlash(filepath.Clean(path))
 	switch clean {
-	case "/opt/homebrew/bin/engram", "/usr/local/bin/engram", "/home/linuxbrew/.linuxbrew/bin/engram":
+	case "/opt/homebrew/bin/engram", "/usr/local/bin/engram":
 		return isEngramCommand(clean)
 	default:
 		return false

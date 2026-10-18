@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -116,7 +115,7 @@ func ResolvePackageBin(packageRoot string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", binError(target, "non-regular-bin-target", nil)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0 {
+	if info.Mode().Perm()&0o111 == 0 {
 		return "", binError(target, "non-executable-bin-target", nil)
 	}
 	return filepath.Clean(canonicalTarget), nil

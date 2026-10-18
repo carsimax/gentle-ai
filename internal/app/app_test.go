@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"slices"
 	"sort"
 	"strings"
@@ -727,9 +726,6 @@ func TestTUIExecuteWithBackgroundPreservesConcurrentCLIStateMutation(t *testing.
 func buildAppCandidateBinary(t *testing.T) string {
 	t.Helper()
 	binary := filepath.Join(t.TempDir(), "gentle-ai")
-	if runtime.GOOS == "windows" {
-		binary += ".exe"
-	}
 	// A cold build of the whole binary on a shared CI runner can exceed
 	// 30s; the cap only guards against a hung toolchain, not build speed.
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -758,8 +754,7 @@ func TestTuiInstallOnThenSyncRefreshesCanonicalAndRefusesTamperedOpenCodeActivat
 		t.Fatalf("TUI install error = %v", installResult.Err)
 	}
 
-	// Issue #3209: the managed launcher name is host-dependent.
-	launcher := opencodeactivation.ManagedLauncherPaths(home, runtime.GOOS)[0]
+	launcher := opencodeactivation.ManagedLauncherPaths(home)[0]
 	before, err := os.ReadFile(launcher)
 	if err != nil {
 		t.Fatalf("ReadFile(launcher): %v", err)
@@ -2746,9 +2741,6 @@ func codexConfigAndStateTier(t *testing.T, home string) (string, string) {
 // and a Standard install in the session that wrote Fast retires exactly it.
 func TestTUIInstallRecordsOnlyTheCodexServiceTierEngramWrote(t *testing.T) {
 	t.Cleanup(codex.SetRuntimeVersionCommandForTest("codex-cli 0.144.0", nil))
-	if runtime.GOOS == "windows" {
-		t.Skip("fake engram runtime is a POSIX shell script")
-	}
 	home := t.TempDir()
 	previousUserHomeDir := appUserHomeDir
 	appUserHomeDir = func() (string, error) { return home, nil }
@@ -2854,19 +2846,11 @@ func TestRunArgs_UpgradeUnsupportedOptionStopsBeforeAnyEffect(t *testing.T) {
 	}
 }
 
-// writeFakeOpenCodeRuntime places a fake opencode executable for the host OS
-// on a fresh dir and returns that dir. Windows needs a PATHEXT-visible .cmd
-// (there is no execute bit and sh scripts are not executable); issue #3209.
+// writeFakeOpenCodeRuntime places a fake opencode executable on a fresh dir
+// and returns that dir.
 func writeFakeOpenCodeRuntime(t *testing.T) string {
 	t.Helper()
 	binDir := t.TempDir()
-	if runtime.GOOS == "windows" {
-		path := filepath.Join(binDir, "opencode.cmd")
-		if err := os.WriteFile(path, []byte("@echo off\r\necho opencode 1.15.11\r\n"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		return binDir
-	}
 	path := filepath.Join(binDir, "opencode")
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf 'opencode 1.15.11\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)

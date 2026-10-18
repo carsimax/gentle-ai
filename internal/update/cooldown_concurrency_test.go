@@ -210,13 +210,9 @@ func awaitSignal(t *testing.T, ctx context.Context, signal <-chan struct{}, mess
 
 func buildCandidateBinary(t *testing.T) string {
 	t.Helper()
-	binaryName := "gentle-ai"
-	if runtime.GOOS == "windows" {
-		binaryName += ".exe"
-	}
-	binary := filepath.Join(t.TempDir(), binaryName)
-	// Building the CLI can approach 30 seconds even with a warm cache on
-	// Windows. Keep a bounded build budget separate from actor deadlines.
+	binary := filepath.Join(t.TempDir(), "gentle-ai")
+	// Building the CLI can approach 30 seconds even with a warm cache. Keep a
+	// bounded build budget separate from actor deadlines.
 	const buildTimeout = 2 * time.Minute
 	ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
 	defer cancel()

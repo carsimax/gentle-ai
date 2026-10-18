@@ -199,7 +199,7 @@ Canonical route facts come from
 Review mode is implemented in
 [`internal/cli/review_mode.go`](../internal/cli/review_mode.go). The current
 authority and recovery behavior is documented in the
-[Organic RDD architecture](architecture/organic-rdd.md).
+[review integration contract](review-integration.md).
 
 Pi is the one runtime whose ODD steps differ: it renders Gentle Shell's own
 steps (the visible `todo` projection, routing through its orchestrator's

@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -697,7 +696,7 @@ func TestReviewRepositoryContextKeyIsCreatedOncePrivatelyByConcurrentDerivers(t 
 	if err != nil || !info.Mode().IsRegular() || info.Size() != reviewRepositoryContextKeyBytes {
 		t.Fatalf("key file = %v, %v", info, err)
 	}
-	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
+	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("key file mode = %v, want 0600", info.Mode().Perm())
 	}
 	entries, err := os.ReadDir(filepath.Dir(path))
@@ -714,10 +713,9 @@ func TestReviewRepositoryContextKeyIsCreatedOncePrivatelyByConcurrentDerivers(t 
 func TestReviewRepositoryContextKeyRefusesUnsafeFiles(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
-		posix   bool
 		prepare func(t *testing.T, path string)
 	}{
-		{name: "symlink", posix: true, prepare: func(t *testing.T, path string) {
+		{name: "symlink", prepare: func(t *testing.T, path string) {
 			real := filepath.Join(filepath.Dir(path), "elsewhere.key")
 			if err := os.WriteFile(real, bytes.Repeat([]byte{7}, reviewRepositoryContextKeyBytes), 0o600); err != nil {
 				t.Fatal(err)
@@ -726,7 +724,7 @@ func TestReviewRepositoryContextKeyRefusesUnsafeFiles(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{name: "group readable", posix: true, prepare: func(t *testing.T, path string) {
+		{name: "group readable", prepare: func(t *testing.T, path string) {
 			if err := os.WriteFile(path, bytes.Repeat([]byte{7}, reviewRepositoryContextKeyBytes), 0o640); err != nil {
 				t.Fatal(err)
 			}
@@ -746,9 +744,6 @@ func TestReviewRepositoryContextKeyRefusesUnsafeFiles(t *testing.T) {
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.posix && runtime.GOOS == "windows" {
-				t.Skip("POSIX key file modes and unprivileged symlinks")
-			}
 			home := isolatedRctx3KeyHome(t)
 			repo := initSnapshotRepo(t)
 			record, store := pristineReviewingFixture(t, repo, "rctx3-unsafe-key")

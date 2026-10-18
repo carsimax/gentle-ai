@@ -160,7 +160,6 @@ func TestBranchPRChecklistsKeepEveryTemplateGateSeparate(t *testing.T) {
 			items: []string{
 				"- [ ] Unit tests pass (`go test ./...`)",
 				"- [ ] Go format passes (`go run ./internal/gofmtcheck`)",
-				"- [ ] E2E tests pass (`cd e2e && ./docker-test.sh`)",
 				"- [ ] Benchmark validation completed, or this change is not applicable to the benchmark (explain why in the Test Plan).",
 				"- [ ] I understand, reviewed, and take responsibility for the complete submission",
 				"- [ ] I selected exactly one AI-assistance option and, if material assistance was used, completed all applicable declaration fields",
@@ -172,7 +171,6 @@ func TestBranchPRChecklistsKeepEveryTemplateGateSeparate(t *testing.T) {
 				"- PR stays within 400 changed lines",
 				"- Unit tests pass (`go test ./...`)",
 				"- Go format passes (`go run ./internal/gofmtcheck`)",
-				"- E2E tests pass (`cd e2e && ./docker-test.sh`)",
 				"- Benchmark validation completed",
 				"- Understood, reviewed, and took responsibility for the complete submission",
 				"- Selected exactly one AI-assistance option",

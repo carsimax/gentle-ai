@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -136,7 +135,7 @@ func TestPrepareOpenCodeBackgroundActivationHonorsEffectiveIntent(t *testing.T) 
 	home := t.TempDir()
 	oldVersion, oldTarget := runOpenCodeVersion, resolveOpenCodeTarget
 	runOpenCodeVersion = func(string) (string, error) { return "1.15.11", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) { return "/real/opencode", nil }
+	resolveOpenCodeTarget = func(string, string) (string, error) { return "/real/opencode", nil }
 	t.Cleanup(func() { runOpenCodeVersion, resolveOpenCodeTarget = oldVersion, oldTarget })
 
 	for _, tt := range []struct {
@@ -225,7 +224,7 @@ func TestDryRunReportsBackgroundIntentWithoutWritingState(t *testing.T) {
 	originalVersion, originalTarget := runOpenCodeVersion, resolveOpenCodeTarget
 	osUserHomeDir = func() (string, error) { return home, nil }
 	runOpenCodeVersion = func(string) (string, error) { return "development", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) {
+	resolveOpenCodeTarget = func(string, string) (string, error) {
 		return filepath.Join(home, "opencode-real"), nil
 	}
 	t.Cleanup(func() { osUserHomeDir = original })
@@ -270,7 +269,7 @@ func TestInstallActivationCapabilityControlsPolicyAndReport(t *testing.T) {
 			if err := os.WriteFile(realTarget, []byte("real"), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			resolveOpenCodeTarget = func(string, string, string) (string, error) { return realTarget, nil }
+			resolveOpenCodeTarget = func(string, string) (string, error) { return realTarget, nil }
 			addUserPath = func(string) error { return nil }
 			t.Cleanup(func() { runOpenCodeVersion, resolveOpenCodeTarget, addUserPath = oldVersion, oldTarget, oldPath })
 
@@ -303,9 +302,6 @@ func TestInstallActivationCapabilityControlsPolicyAndReport(t *testing.T) {
 // installer's .zshrc PATH line runs after the login profile and shadows the
 // launcher, so the report must say shadowed instead of ready.
 func TestInstallReportsShadowedActivationFromPostApplyState(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX login shells are not used on Windows")
-	}
 	t.Setenv("SHELL", "/bin/zsh")
 	t.Setenv("ZDOTDIR", "")
 	home := installTestHome(t)
@@ -323,7 +319,7 @@ func TestInstallReportsShadowedActivationFromPostApplyState(t *testing.T) {
 	}
 	oldVersion, oldTarget, oldPath := runOpenCodeVersion, resolveOpenCodeTarget, addUserPath
 	runOpenCodeVersion = func(string) (string, error) { return "1.15.11", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) { return realTarget, nil }
+	resolveOpenCodeTarget = func(string, string) (string, error) { return realTarget, nil }
 	addUserPath = func(string) error { return nil }
 	t.Cleanup(func() { runOpenCodeVersion, resolveOpenCodeTarget, addUserPath = oldVersion, oldTarget, oldPath })
 
@@ -426,15 +422,13 @@ func TestLegacySDDInstallDoesNotWriteBackgroundPolicy(t *testing.T) {
 func installTestHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
-	// GGA resolves its Windows config from APPDATA, not osUserHomeDir.
-	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 	oldHome, oldRun, oldLookPath := osUserHomeDir, runCommand, cmdLookPath
 	oldVersion, oldTarget := runOpenCodeVersion, resolveOpenCodeTarget
 	osUserHomeDir = func() (string, error) { return home, nil }
 	runCommand = func(string, ...string) error { return nil }
 	cmdLookPath = missingBinaryLookPath
 	runOpenCodeVersion = func(string) (string, error) { return "development", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) {
+	resolveOpenCodeTarget = func(string, string) (string, error) {
 		return filepath.Join(home, "opencode-real"), nil
 	}
 	t.Cleanup(func() {
@@ -583,7 +577,7 @@ func syncBackgroundTestHome(t *testing.T) string {
 	runCommand = func(string, ...string) error { return nil }
 	cmdLookPath = func(name string) (string, error) { return "/usr/bin/" + name, nil }
 	runOpenCodeVersion = func(string) (string, error) { return "development", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) {
+	resolveOpenCodeTarget = func(string, string) (string, error) {
 		return filepath.Join(home, "opencode-real"), nil
 	}
 	t.Cleanup(func() {
@@ -624,7 +618,7 @@ func TestSyncBackgroundPrecedenceAndDryRunReporting(t *testing.T) {
 			home := syncBackgroundTestHome(t)
 			oldVersion, oldTarget := runOpenCodeVersion, resolveOpenCodeTarget
 			runOpenCodeVersion = func(string) (string, error) { return "development", nil }
-			resolveOpenCodeTarget = func(string, string, string) (string, error) {
+			resolveOpenCodeTarget = func(string, string) (string, error) {
 				return filepath.Join(home, "opencode-real"), nil
 			}
 			t.Cleanup(func() { runOpenCodeVersion, resolveOpenCodeTarget = oldVersion, oldTarget })
@@ -804,7 +798,7 @@ func TestSyncReportsManagedLauncherChanges(t *testing.T) {
 	}
 	oldVersion, oldTarget, oldPath := runOpenCodeVersion, resolveOpenCodeTarget, addUserPath
 	runOpenCodeVersion = func(string) (string, error) { return "1.15.11", nil }
-	resolveOpenCodeTarget = func(string, string, string) (string, error) { return target, nil }
+	resolveOpenCodeTarget = func(string, string) (string, error) { return target, nil }
 	addUserPath = func(string) error { return nil }
 	t.Cleanup(func() { runOpenCodeVersion, resolveOpenCodeTarget, addUserPath = oldVersion, oldTarget, oldPath })
 
@@ -831,13 +825,10 @@ func TestSyncReportsManagedLauncherChanges(t *testing.T) {
 	}
 	// Issue #3209: the managed launcher set is host-dependent (POSIX script vs
 	// cmd+ps1 pair), so the assertion must name the host's launchers.
-	for _, launcher := range opencodeactivation.ManagedLauncherPaths(home, runtime.GOOS) {
+	for _, launcher := range opencodeactivation.ManagedLauncherPaths(home) {
 		if !contains(result.ChangedFiles, launcher) {
 			t.Fatalf("sync ChangedFiles %v missing managed launcher %q", result.ChangedFiles, launcher)
 		}
-	}
-	if runtime.GOOS == "windows" {
-		return
 	}
 	profile := filepath.Join(home, ".zprofile")
 	if !contains(result.ChangedFiles, profile) {

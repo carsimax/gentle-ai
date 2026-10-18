@@ -3,7 +3,6 @@ package cli
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -16,10 +15,6 @@ func TestExecuteCommandQuietModeIncludesCapturedOutputOnFailure(t *testing.T) {
 
 	shell := "bash"
 	args := []string{"-c", "echo boom && exit 1"}
-	if runtime.GOOS == "windows" {
-		shell = "cmd"
-		args = []string{"/c", "echo boom && exit 1"}
-	}
 
 	err := executeCommand(shell, args...)
 	if err == nil {
@@ -37,9 +32,6 @@ func TestExecuteCommandQuietModeIncludesCapturedOutputOnFailure(t *testing.T) {
 // executeCommand, using a fake "brew" script on the same pattern as
 // TestExecuteCommandInheritsPiCodingAgentDirForChildProcesses.
 func TestExecuteCommandSetsHomebrewNoAutoUpdateEnvForBrewCommands(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the fake brew script below is a POSIX shell script")
-	}
 	restoreStreaming := SetCommandOutputStreaming(false)
 	t.Cleanup(restoreStreaming)
 	// Keep the assertion independent of the developer's own Homebrew settings.
