@@ -31,6 +31,19 @@ git config alias.latest-release '!git fetch upstream --tags -q && git tag --sort
 git checkout cmx
 ```
 
+## Instalar gentle-ai desde este fork
+
+```bash
+./scripts/install-fork.sh    # compila e instala en ~/go/bin/gentle-ai
+gentle-ai --version          # ej. 4.2.0-cmx.<commit>
+gentle-ai sync               # re-aplica configs y skills a los agentes con esta versión
+```
+
+- `~/go/bin` debe estar en el `PATH` antes que cualquier otra instalación (Homebrew, install.sh).
+- La versión es `<último tag>-cmx.<commit>`; termina en `.dirty` si había cambios sin commit.
+- **No uses `gentle-ai upgrade`**: reemplazaría tu build con la release oficial.
+  Cuando avise de una versión nueva, haz el merge (ver abajo) y vuelve a correr el script.
+
 ## Flujo diario
 
 ```bash
@@ -52,6 +65,7 @@ git merge v4.2.0             # o: git merge upstream/main para lo más reciente
 # resolver conflictos si aparecen, luego:
 go test ./...
 git push
+./scripts/install-fork.sh    # reinstalar con la nueva base
 ```
 
 **Se usa `merge`, no `rebase`**: `cmx` está publicada, y el rebase reescribe la
