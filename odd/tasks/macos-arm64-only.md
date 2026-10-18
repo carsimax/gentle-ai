@@ -1,7 +1,7 @@
 # macOS arm64 only fork
 
 Objective: make the `cmx` fork support only macOS on Apple Silicon and switch upstream intake from merge to per-PR cherry-pick.
-Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runner: `go build ./... && go vet ./...`, `scripts/test-fast.sh`.
+Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `single-pr`. Test runner: `go build ./... && go vet ./...`, `scripts/test-fast.sh`.
 
 ## Specs
 
@@ -55,3 +55,4 @@ Route evidence: no Writer trigger (units depend on each other's deletions; no pa
 - L15: Full suite (`COUNT=1 scripts/test-fast.sh`) green except baseline failures L7. Remaining "Windows"/"Linux" text in production Go is rationale comments, recoverytrace history rows, and input validation kept on purpose (pi windowsDrivePath, backup `..\..` traversal, risk `.ps1` classification).
 - L16: Differential old (cmx) vs new binary with isolated HOME: only the version string differs for --help, version, install/sync --dry-run, doctor --help, review mode status. Native review assessed high for 54056 lines; user chose "Omitir esta vez" (declined_this_candidate). Open: S9 version scheme.
 - L17 (2026-10-18): "numeroacion propoa cmx-1.0.0 solo espera que el otro agente termine de ejecutar sus test"; then "qu es mejor" -> recommended B because plain `cmx-1.0.0` fails the OpenCode review plugin semver >= 2.0.0 check and the update check reads it as 1.0.0 and offers upstream 4.x forever.
+- L18 (2026-10-18): "esto sera un solo pr" — delivery strategy single-pr; 567ec7fa also carries gentle-ai-10 contribution-removal files (shared index) and stays unsplit.
