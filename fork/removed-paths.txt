@@ -136,3 +136,4 @@ e2e/normalize-private-optional-platform-closure.test.mjs
 e2e/shared-recovery.test.mjs
 e2e/shared-settings-durability.test.mjs
 e2e/user-global-graph.test.mjs
+bench/lock_other.go
