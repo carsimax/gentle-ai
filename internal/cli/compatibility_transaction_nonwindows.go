@@ -1,5 +1,3 @@
-//go:build !windows
-
 package cli
 
 import "github.com/gentleman-programming/gentle-ai/v4/internal/model"

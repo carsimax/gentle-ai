@@ -1,6 +1,4 @@
-//go:build !windows
-
-// Package scripts exposes the fixed Linux Shell runtime installation assets.
+// Package scripts exposes the fixed Shell runtime installation assets.
 package scripts
 
 import "embed"

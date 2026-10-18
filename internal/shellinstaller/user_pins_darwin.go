@@ -1,5 +1,3 @@
-//go:build darwin
-
 package shellinstaller
 
 // Darwin arm64 mirrors of the Linux pins: the same release versions, other

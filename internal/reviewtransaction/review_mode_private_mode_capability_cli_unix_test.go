@@ -1,5 +1,3 @@
-//go:build !windows
-
 // This file drives the `gentle-ai review mode` CLI surface for the #5112
 // filesystem-capability class from the same external package as
 // review_mode_disable_guidance_cli_unix_test.go: the primitives that reproduce

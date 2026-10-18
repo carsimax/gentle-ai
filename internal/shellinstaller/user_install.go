@@ -6,8 +6,7 @@ import (
 )
 
 // UserInstallRequest, userConfirmation and UserInstallFromEntry are platform
-// contracts: Windows binds a channel, Linux keeps its five-value selection.
-// See user_selection_windows.go and user_selection_other.go.
+// contracts; see user_selection_other.go.
 
 type UserInstallResult struct {
 	Destination, Prefix, Agent, State string

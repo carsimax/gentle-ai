@@ -12,8 +12,7 @@ import (
 // cross-process file lock and prove same-process exclusion survives it
 // (injectable-seam precedent: loadCompactRecoveryRecords in
 // internal/reviewtransaction/compact_inspect.go). The real implementation
-// is the platform function in the build-tagged state_lock_{unix,windows}.go
-// files; swapping it never changes same-process exclusion, which the path
+// is the platform function in state_lock_unix.go; swapping it never changes same-process exclusion, which the path
 // mutex below carries.
 var lockFileExclusive = lockFileExclusivePlatform
 

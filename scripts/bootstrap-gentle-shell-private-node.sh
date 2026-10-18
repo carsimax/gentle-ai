@@ -16,18 +16,9 @@ case "$archive" in /*) ;; *) fail 'archive must be absolute';; esac
 parent=$(dirname -- "$destination")
 name=$(basename -- "$destination")
 case "$name" in ''|.|..|*[!A-Za-z0-9_.-]*) fail 'invalid destination';; esac
-# One fixed official archive per kernel; beside it only utility spellings differ.
+# One fixed official archive for darwin/arm64.
 handoff=
 case "$(uname -s)" in
-    Linux)
-        accepted=783130984963db7ba9cbd01089eaf2c2efb055c7c1693c943174b967b3050cb8 bytes=57224421
-        sha256=sha256sum
-        private_owner() { test "$(stat -c %u "$1")" = "$(id -u)" && test "$(stat -c %a "$1")" = 700; }
-        directory_preimage() { stat -c '%d:%i:%u:%a' "$1"; }
-        file_preimage() { stat -c '%d:%i:%s:%y:%z' "$1"; }
-        bounded() { timeout --kill-after=2 15 "$@"; }
-        publish() { mv -T --no-clobber "$1" "$2"; }
-        ;;
     Darwin)
         accepted=e1a97e14c99c803e96c7339403282ea05a499c32f8d83defe9ef5ec66f979ed1 bytes=52087559
         sha256='shasum -a 256'

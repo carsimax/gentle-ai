@@ -31,8 +31,8 @@ Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runn
 | T7c | S10 | delegated (parallel) | done: update + update/upgrade | fadf8fe4 |
 | T7d | S10 | delegated (parallel) | done: opencode + uninstall (exported signatures kept) | b236be15 |
 | T7e | S10 | delegated (parallel) | done: leaf packages + agents | 145c6812 |
-| T7f | S10 | delegated (after wave A) | in progress: system, installcmd, planner, gga, cli hub, exported-signature cleanup | |
-| T7g | S10 | inline | pending: build-tag simplification, ratchet baseline, full suite | |
+| T7f | S10 | delegated (after wave A) | done: system, installcmd, planner, gga, cli hub, exported-signature cleanup | d4c0b9b0 |
+| T7g | S4, S5, S10 | inline | done: release scripts darwin-only, Linux bootstrap case removed, 75 OS build tags stripped, full suite green except 3 baseline failures | 228dd82b + this commit |
 
 Route evidence: no Writer trigger (units depend on each other's deletions; no parallel units), so the parent works inline.
 
@@ -51,3 +51,5 @@ Route evidence: no Writer trigger (units depend on each other's deletions; no pa
 - L11: Decisions for visible darwin output: strings naming Windows/Linux support now say macOS on Apple Silicon only; detection keeps macOS-relevant tools (brew, nix) and drops Linux/Windows package managers; keep `/usr/local/bin` brew fallback; keep OpenCode XDG_CONFIG_HOME handling; keep Pi `windowsDrivePath` input validation (repository/user input, not host OS); release provenance lists only darwin/arm64. Assumption: "absolute" overrides the Claude-Code-only memory for OS branches in other agents' adapters.
 - L12: Another session (gentle-ai-10) removed the bench module and gentle-ai-bench skill on this branch (24ee38cd); user decided it commits its own work. Its TestEmbeddedAssetCount regression (16 vs 15 skill dirs) is that session's to fix.
 - L13: Wave A committed: engram 3acb687a, review d9bf394b, update fadf8fe4, opencode b236be15, leaves 145c6812; integration build/vet green; package tests green except baseline update failures.
+- L14: T7f kept the non-Homebrew engram download branch (macOS without brew, also used by upgrade) and rebaselined the Linux-only orchestrator module tests on darwin (only install paths changed, content bytes identical). Ratchet baseline lost 2 STALE entries.
+- L15: Full suite (`COUNT=1 scripts/test-fast.sh`) green except baseline failures L7. Remaining "Windows"/"Linux" text in production Go is rationale comments, recoverytrace history rows, and input validation kept on purpose (pi windowsDrivePath, backup `..\..` traversal, risk `.ps1` classification).

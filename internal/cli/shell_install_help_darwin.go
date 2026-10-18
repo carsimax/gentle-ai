@@ -1,5 +1,3 @@
-//go:build darwin
-
 package cli
 
 // macOS contract: Separate and Shared modes and Shared recovery, with the

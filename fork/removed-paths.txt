@@ -142,3 +142,17 @@ internal/assets/skills/gentle-ai-bench/*
 internal/app/bench_model_picker.go
 internal/app/bench_model_picker_fixture.go
 internal/reviewtransaction/bench_fixture.go
+internal/assets/gga/gga.cmd
+internal/assets/gga/gga.ps1
+internal/reviewerprovider/claude_adapter_posix.go
+internal/reviewerprovider/windows_batch_cmdline.go
+internal/reviewerprovider/windows_batch_cmdline_test.go
+internal/reviewtransaction/rar_unsupported_filesystem.go
+internal/reviewtransaction/rar_unsupported_filesystem_test.go
+internal/reviewtransaction/rar_windows_authority_filesystem.go
+internal/reviewtransaction/rar_windows_authority_filesystem_test.go
+internal/reviewtransaction/rar_windows_owner_trust.go
+internal/reviewtransaction/rar_windows_owner_trust_test.go
+internal/system/detect_linux_probe_test.go
+internal/system/powershell.go
+internal/system/powershell_test.go
