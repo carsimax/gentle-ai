@@ -310,7 +310,6 @@ Review Skills
 
 Foundation Skills
   [x] Go Testing
-  [x] Gentle AI Bench
   [x] Skill Creator
   [x] Skill Improver
   [x] Branch & PR

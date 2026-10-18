@@ -202,23 +202,6 @@ Run the battery before merging changes that touch a review-lifecycle surface (fa
 
 The sibling `gentle-pi` repository carries its own battery: `pnpm test:cross-lane` in [Gentleman-Programming/gentle-pi](https://github.com/Gentleman-Programming/gentle-pi).
 
-### Benchmark Validation
-
-[`bench/`](bench/README.md) is a separate Go module, so root-module tests do not validate it. For benchmark-module changes, run these commands from `bench/`:
-
-```bash
-go build ./...
-go vet ./...
-go test ./...
-```
-
-The `model-picker` axis (`j97`) and damaged-store crash-recovery journeys use
-the `bench_fixture` product build tag. Build that product binary from the
-repository root only when running those opt-in axes; their exact driven commands
-are documented in [`bench/README.md`](bench/README.md).
-
-Benchmark validation applies to review-lifecycle, gate, recovery, delivery, benchmark implementation/corpus/classifier, and benchmark-claim changes. For measured product-behavior changes, use driven mode and report the command, tested binary or commit, selected subset or axes, and result summary. Compare before and after only when claiming a measured friction change. For unrelated changes, mark benchmark validation `N/A` with a brief reason.
-
 ### Windows — Known Test Limitations
 
 Some unit tests require OS-level capabilities that are restricted on Windows by default.
@@ -368,7 +351,6 @@ Review feedback should be warm, direct, and useful quickly. Start with the actio
 - [ ] Commits are organized by deliverable work unit
 - [ ] All unit tests pass (`go test ./...`)
 - [ ] E2E tests pass (`cd e2e && ./docker-test.sh`)
-- [ ] Benchmark validation completed, or this change is not applicable to the benchmark (explain why in the Test Plan).
 - [ ] Commits follow Conventional Commits format
 - [ ] Code is self-reviewed
 - [ ] I understand and take responsibility for the complete submission, and have disclosed any material AI assistance in the PR

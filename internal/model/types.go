@@ -143,7 +143,6 @@ const (
 	SkillWorkUnitCommits     SkillID = "work-unit-commits"
 	SkillRDDDefectWorkflow   SkillID = "rdd-defect-workflow"
 	SkillSystemicIssueTriage SkillID = "systemic-issue-triage"
-	SkillGentleAIBench       SkillID = "gentle-ai-bench"
 )
 
 type PersonaID string
