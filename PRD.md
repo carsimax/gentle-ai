@@ -1103,9 +1103,6 @@ gentle-ai/
 │           ├── installing.go
 │           ├── complete.go
 │           └── backup.go
-├── e2e/
-│   ├── Dockerfile.*                # Per-OS test containers
-│   └── e2e_test.sh
 ├── scripts/
 │   └── install.sh                  # curl-able installer script
 ├── go.mod

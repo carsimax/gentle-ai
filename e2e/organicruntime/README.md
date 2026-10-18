@@ -40,4 +40,4 @@ The comparison fixture preserves the full inherited history while distinguishing
 
 ## Limits
 
-This is deterministic client-runtime evidence, not model-behavior evidence or a reproduction of the interactive agent-list display. It is **not** a network-namespace proof. Docker is not required for this local probe; the separate `Dockerfile.claude-network-none` lane verifies its own native-adapter transport boundary and pinned version.
+This is deterministic client-runtime evidence, not model-behavior evidence or a reproduction of the interactive agent-list display. It is **not** a network-namespace proof.
