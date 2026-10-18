@@ -6,11 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
 func TestResolveCapabilityVersionTable(t *testing.T) {
@@ -81,30 +78,21 @@ func TestVersionPreReleasePrecedenceIgnoresBuildMetadata(t *testing.T) {
 	}
 }
 
-// resolveTargetCandidateName is the host-native candidate filename: Windows
-// has no execute bit, so the fixture must be PATHEXT-shaped there (#3209).
-func resolveTargetCandidateName() string {
-	if runtime.GOOS == "windows" {
-		return "opencode.cmd"
-	}
-	return "opencode"
-}
-
 func TestResolveTargetSkipsManagedBinAndPreventsRecursion(t *testing.T) {
 	home := t.TempDir()
 	managed := BinDir(home)
-	real := filepath.Join(t.TempDir(), resolveTargetCandidateName())
+	real := filepath.Join(t.TempDir(), "opencode")
 	if err := os.MkdirAll(managed, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(managed, resolveTargetCandidateName()), []byte("managed"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(managed, "opencode"), []byte("managed"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(real, []byte("real"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := ResolveTarget(home, runtime.GOOS, managed+string(os.PathListSeparator)+filepath.Dir(real))
+	got, err := ResolveTarget(home, "", managed+string(os.PathListSeparator)+filepath.Dir(real))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,9 +102,8 @@ func TestResolveTargetSkipsManagedBinAndPreventsRecursion(t *testing.T) {
 }
 
 // normalizedCandidatePath resolves the fixture path exactly the way
-// ResolveTarget resolves candidates (EvalSymlinks + Abs): on Windows
-// t.TempDir() hands out 8.3 short names that production expands (#3209),
-// and on macOS /tmp itself is a symlink.
+// ResolveTarget resolves candidates (EvalSymlinks + Abs): on macOS /tmp
+// itself is a symlink.
 func normalizedCandidatePath(t *testing.T, path string) string {
 	t.Helper()
 	resolved, err := filepath.EvalSymlinks(path)
@@ -132,7 +119,7 @@ func normalizedCandidatePath(t *testing.T, path string) string {
 
 func TestResolveTargetRejectsEmptyAndRelativeEntries(t *testing.T) {
 	home := t.TempDir()
-	if _, err := ResolveTarget(home, "linux", ""); err == nil {
+	if _, err := ResolveTarget(home, "", ""); err == nil {
 		t.Fatal("ResolveTarget(empty PATH) error = nil, want unsafe PATH entry rejected")
 	}
 	workingDir := t.TempDir()
@@ -140,7 +127,7 @@ func TestResolveTargetRejectsEmptyAndRelativeEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(workingDir)
-	if _, err := ResolveTarget(home, "linux", "."); err == nil {
+	if _, err := ResolveTarget(home, "", "."); err == nil {
 		t.Fatal("ResolveTarget(relative PATH) error = nil, want cwd executable rejected")
 	}
 }
@@ -152,15 +139,15 @@ func TestResolveTargetContinuesAfterBrokenCandidate(t *testing.T) {
 	// A directory with the candidate name is a broken candidate on every OS:
 	// stat succeeds and IsRegular fails, so resolution must continue. A broken
 	// symlink would prove the same only where symlinks are creatable (#3209).
-	if err := os.MkdirAll(filepath.Join(brokenDir, resolveTargetCandidateName()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(brokenDir, "opencode"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	valid := filepath.Join(validDir, resolveTargetCandidateName())
+	valid := filepath.Join(validDir, "opencode")
 	if err := os.WriteFile(valid, []byte("valid"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := ResolveTarget(home, runtime.GOOS, strings.Join([]string{brokenDir, validDir}, string(os.PathListSeparator)))
+	got, err := ResolveTarget(home, "", strings.Join([]string{brokenDir, validDir}, string(os.PathListSeparator)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,19 +156,7 @@ func TestResolveTargetContinuesAfterBrokenCandidate(t *testing.T) {
 	}
 }
 
-func TestSplitPathUsesTargetOperatingSystem(t *testing.T) {
-	if got := splitPath(`C:\\OpenCode;D:\\Tools`, "windows"); len(got) != 2 {
-		t.Fatalf("Windows splitPath() = %#v, want two entries", got)
-	}
-	if got := splitPath(`/opt/opencode:/usr/local/bin`, "linux"); len(got) != 2 {
-		t.Fatalf("POSIX splitPath() = %#v, want two entries", got)
-	}
-}
-
 func TestLauncherContentsPreserveExplicitFalse(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX launcher execution is not supported on Windows")
-	}
 	home := t.TempDir()
 	target := filepath.Join(t.TempDir(), "real-opencode")
 	if err := os.WriteFile(target, []byte("#!/bin/sh\nprintf '%s|%s' \"${OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS-unset}\" \"$1\"\n"), 0o755); err != nil {
@@ -189,7 +164,6 @@ func TestLauncherContentsPreserveExplicitFalse(t *testing.T) {
 	}
 
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:   "linux",
 		Path: filepath.Dir(target),
 		RunVersion: func(string) (string, error) {
 			return "1.15.11", nil
@@ -231,22 +205,6 @@ func TestLauncherContentsPreserveExplicitFalse(t *testing.T) {
 	}
 }
 
-func TestWindowsLauncherContents(t *testing.T) {
-	contents := launcherContent("windows", `C:\Program Files\OpenCode\opencode.exe`)
-	for _, name := range []string{WindowsCMDPathPlaceholder, WindowsPS1PathPlaceholder} {
-		content := contents[name]
-		if !strings.Contains(content, OwnershipMarker) || !strings.Contains(content, BackgroundSubagentsEnv) {
-			t.Fatalf("%s launcher = %q, missing ownership/env contract", name, content)
-		}
-		if !strings.Contains(content, "opencode.exe") {
-			t.Fatalf("%s launcher = %q, missing real target", name, content)
-		}
-	}
-	if strings.Contains(contents[WindowsCMDPathPlaceholder], "opencode.cmd") || strings.Contains(contents[WindowsPS1PathPlaceholder], "opencode.ps1") {
-		t.Fatal("Windows launchers must execute the resolved real target, not themselves")
-	}
-}
-
 func TestActivationIsIdempotentAndOffRemovesOnlyOwnedFiles(t *testing.T) {
 	home := t.TempDir()
 	target := filepath.Join(t.TempDir(), "opencode")
@@ -254,19 +212,12 @@ func TestActivationIsIdempotentAndOffRemovesOnlyOwnedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := ActivationOptions{
-		OS:            runtime.GOOS,
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) {
-			return system.UserPathAddition{}, nil
-		},
 		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
 	}
 	paths := []string{POSIXLauncherPath(home)}
-	if runtime.GOOS == "windows" {
-		paths = []string{WindowsCMDPath(home), WindowsPS1Path(home)}
-	}
 	first, err := Activate(home, options)
 	if err != nil {
 		t.Fatal(err)
@@ -315,7 +266,6 @@ func TestActivationRefusesUserOwnedCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "linux",
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
 		ResolveTarget: func(string, string, string) (string, error) { return "/real/opencode", nil },
@@ -326,9 +276,6 @@ func TestActivationRefusesUserOwnedCollision(t *testing.T) {
 }
 
 func TestActivationRollsBackLauncherWritesWhenPathUpdateFails(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("simulates POSIX launcher modes; TestWindowsActivationRollback* cover Windows hosts")
-	}
 	home := t.TempDir()
 	target := filepath.Join(t.TempDir(), "opencode")
 	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
@@ -336,7 +283,6 @@ func TestActivationRollsBackLauncherWritesWhenPathUpdateFails(t *testing.T) {
 	}
 	pathErr := errors.New("path update failed")
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "linux",
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return pathErr },
 		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
@@ -349,196 +295,6 @@ func TestActivationRollsBackLauncherWritesWhenPathUpdateFails(t *testing.T) {
 	}
 	if _, err := os.Stat(POSIXLauncherPath(home)); !os.IsNotExist(err) {
 		t.Fatalf("launcher after failed activation = %v, want absent", err)
-	}
-}
-
-func TestWindowsActivationRollbackRemovesOnlyPlanOwnedPathEntry(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	managed := BinDir(home)
-	entries := []string{`C:\Tools`, `"C:\Other"`}
-	remove := func(dir string) error {
-		for i, entry := range entries {
-			if strings.EqualFold(strings.Trim(strings.TrimSpace(entry), `"`), dir) {
-				entries = append(entries[:i], entries[i+1:]...)
-				return nil
-			}
-		}
-		return nil
-	}
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS: "windows", RunVersion: func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) {
-			entries = append([]string{managed}, entries...)
-			return system.UserPathAddition{ProcessAdded: true, PersistentAdded: true}, nil
-		},
-		RollbackUserPathAddition: func(dir string, addition system.UserPathAddition) error {
-			if !addition.PersistentAdded {
-				return nil
-			}
-			return remove(dir)
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if got, want := strings.Join(entries, ";"), `C:\Tools;"C:\Other"`; got != want {
-		t.Fatalf("persistent PATH = %q, want unrelated entries preserved as %q", got, want)
-	}
-}
-
-func TestWindowsActivationRollbackRestoresProcessPathWhenPersistentEntryPreexists(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	persistentEntries := []string{`"` + BinDir(home) + `"`, `C:\Tools`}
-	processEntries := []string{`C:\Tools`}
-	rollbackCalled := false
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS: "windows", RunVersion: func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		AddToUserPathWithResult: func(dir string) (system.UserPathAddition, error) {
-			processEntries = append([]string{dir}, processEntries...)
-			return system.UserPathAddition{ProcessAdded: true}, nil
-		},
-		RollbackUserPathAddition: func(dir string, addition system.UserPathAddition) error {
-			rollbackCalled = true
-			if !addition.ProcessAdded || addition.PersistentAdded {
-				t.Fatalf("rollback addition = %+v, want process-only ownership", addition)
-			}
-			if processEntries[0] != dir {
-				t.Fatalf("process PATH first entry = %q, want %q", processEntries[0], dir)
-			}
-			processEntries = processEntries[1:]
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Rollback(); err != nil {
-		t.Fatal(err)
-	}
-	if !rollbackCalled || strings.Join(processEntries, ";") != `C:\Tools` {
-		t.Fatalf("process PATH rollback called=%t entries=%q, want original process PATH", rollbackCalled, processEntries)
-	}
-	if got, want := strings.Join(persistentEntries, ";"), `"`+BinDir(home)+`";C:\Tools`; got != want {
-		t.Fatalf("persistent PATH = %q, want unchanged %q", got, want)
-	}
-}
-
-func TestWindowsActivationRollbackJoinsPathRemovalFailureAndRestoresLaunchers(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	pathErr := errors.New("path removal failed")
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS: "windows", RunVersion: func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) {
-			return system.UserPathAddition{ProcessAdded: true, PersistentAdded: true}, nil
-		},
-		RollbackUserPathAddition: func(string, system.UserPathAddition) error { return pathErr },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Rollback(); !errors.Is(err, pathErr) {
-		t.Fatalf("Rollback() error = %v, want joined %v", err, pathErr)
-	}
-	for _, path := range plan.Paths() {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("launcher %q after rollback = %v, want absent", path, err)
-		}
-	}
-}
-
-func TestWindowsActivationFailureAfterPathAdditionRollsBackPath(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	pathErr := errors.New("persistent PATH failed after process update")
-	entries := []string{`C:\Tools`}
-	removed := false
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS: "windows", RunVersion: func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		AddToUserPathWithResult: func(dir string) (system.UserPathAddition, error) {
-			entries = append([]string{dir}, entries...)
-			return system.UserPathAddition{ProcessAdded: true, PersistentAdded: true}, pathErr
-		},
-		RollbackUserPathAddition: func(dir string, addition system.UserPathAddition) error {
-			if !addition.PersistentAdded {
-				return nil
-			}
-			removed = true
-			entries = entries[1:]
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); !errors.Is(err, pathErr) {
-		t.Fatalf("Apply() error = %v, want %v", err, pathErr)
-	}
-	if !removed || strings.Join(entries, ";") != `C:\Tools` {
-		t.Fatalf("PATH failure compensation = removed:%t entries:%q, want original entries", removed, entries)
-	}
-}
-
-func TestWindowsActivationPersistentPathFailurePreservesPreexistingProcessEntry(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	preexistingProcessPath := true
-	persistentErr := errors.New("persistent PATH failed")
-	rollbackCalled := false
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "windows",
-		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) {
-			return system.UserPathAddition{}, persistentErr
-		},
-		RollbackUserPathAddition: func(string, system.UserPathAddition) error {
-			rollbackCalled = true
-			preexistingProcessPath = false
-			return nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); !errors.Is(err, persistentErr) {
-		t.Fatalf("Apply() error = %v, want %v", err, persistentErr)
-	}
-	if rollbackCalled || !preexistingProcessPath {
-		t.Fatalf("process PATH compensation called=%t preexisting=%t, want pre-existing entry preserved", rollbackCalled, preexistingProcessPath)
 	}
 }
 
@@ -590,9 +346,6 @@ func ParseVersion(raw string) (Version, error) {
 // that lost its executable bit must become executable again on rewrite, and a
 // rollback must reinstate the recorded mode.
 func TestDefaultActivationWriteFileForcesLauncherMode(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits")
-	}
 	path := filepath.Join(t.TempDir(), "opencode")
 	if err := os.WriteFile(path, []byte("old launcher\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -614,16 +367,12 @@ func TestDefaultActivationWriteFileForcesLauncherMode(t *testing.T) {
 // re-activation repairs a managed launcher whose bytes are current but whose
 // executable bit was lost; the content-equality skip must not hide it.
 func TestActivationRestoresLauncherExecutableModeWhenContentMatches(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX permission bits")
-	}
 	home := t.TempDir()
 	target := filepath.Join(t.TempDir(), "opencode")
 	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	options := ActivationOptions{
-		OS:            "linux",
 		Path:          filepath.Dir(target),
 		RunVersion:    func(string) (string, error) { return "1.18.18", nil },
 		AddToUserPath: func(string) error { return nil },
@@ -661,7 +410,6 @@ func TestActivationRefusesIncidentalLauncherMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "linux",
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
 		ResolveTarget: func(string, string, string) (string, error) { return "/real/opencode", nil },
@@ -683,7 +431,6 @@ func TestActivationApplyRevalidatesLauncherBeforeWrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "linux",
 		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error { return nil },
 		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
@@ -719,7 +466,7 @@ func TestDeactivationApplyRevalidatesLauncherBeforeRemoval(t *testing.T) {
 	if err := os.WriteFile(launcher, []byte(posixLauncher("/old/opencode")), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	plan, err := PrepareDeactivation(home, ActivationOptions{OS: "linux"})
+	plan, err := PrepareDeactivation(home, ActivationOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -734,52 +481,6 @@ func TestDeactivationApplyRevalidatesLauncherBeforeRemoval(t *testing.T) {
 	}
 }
 
-// Issue #3451: a later launcher replaced while an earlier one is written is
-// preserved, and the earlier plan-owned write is rolled back.
-func TestActivationRevalidationFailureRollsBackEarlierLauncher(t *testing.T) {
-	home := t.TempDir()
-	target := filepath.Join(t.TempDir(), "opencode.exe")
-	if err := os.WriteFile(target, []byte("real"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	first := WindowsCMDPath(home)
-	second := WindowsPS1Path(home)
-	writeCalls := 0
-	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:            "windows",
-		RunVersion:    func(string) (string, error) { return "1.15.11", nil },
-		ResolveTarget: func(string, string, string) (string, error) { return target, nil },
-		WriteFile: func(path string, content []byte, mode os.FileMode) error {
-			writeCalls++
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(path, content, mode); err != nil {
-				return err
-			}
-			if writeCalls == 1 {
-				return os.WriteFile(second, []byte("user replacement"), 0o600)
-			}
-			return nil
-		},
-		AddToUserPathWithResult: func(string) (system.UserPathAddition, error) {
-			return system.UserPathAddition{}, nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); err == nil || !strings.Contains(err.Error(), "revalidate") {
-		t.Fatalf("Apply() error = %v, want revalidation failure", err)
-	}
-	if _, err := os.Stat(first); !os.IsNotExist(err) {
-		t.Fatalf("earlier launcher after failed activation = %v, want absent", err)
-	}
-	if got, err := os.ReadFile(second); err != nil || string(got) != "user replacement" {
-		t.Fatalf("replaced launcher after failed activation = %q, %v; want preserved", got, err)
-	}
-}
-
 // Issue #3451: rollback restores only bytes this plan still owns; a launcher
 // replaced after the write is left for its new owner.
 func TestActivationRollbackPreservesLauncherReplacedAfterWrite(t *testing.T) {
@@ -791,7 +492,6 @@ func TestActivationRollbackPreservesLauncherReplacedAfterWrite(t *testing.T) {
 	launcher := POSIXLauncherPath(home)
 	pathErr := errors.New("path update failed")
 	plan, err := PrepareActivation(home, ActivationOptions{
-		OS:         "linux",
 		RunVersion: func(string) (string, error) { return "1.15.11", nil },
 		AddToUserPath: func(string) error {
 			if err := os.WriteFile(launcher, []byte("user replacement"), 0o600); err != nil {
@@ -818,13 +518,8 @@ func TestIsManagedLauncherRejectsIncidentalAndMalformedMarkers(t *testing.T) {
 		want                bool
 	}{
 		{"posix old target", "opencode", posixLauncher("/old/opencode"), true},
-		{"cmd old target", "opencode.cmd", windowsCMDLauncher(`C:\old\opencode.exe`), true},
-		{"cmd powershell target", "opencode.cmd", windowsCMDLauncher(`C:\old\opencode.ps1`), true},
-		{"powershell old target", "opencode.ps1", windowsPS1Launcher(`C:\old\opencode.exe`), true},
 		{"incidental marker", "opencode", "#!/bin/sh\n# user mentions " + OwnershipMarker + "\necho user\n", false},
 		{"truncated generated header", "opencode", "#!/bin/sh\n# " + OwnershipMarker + "\nset -eu\n", false},
-		{"cmd direct form for powershell target", "opencode.cmd", strings.Replace(windowsCMDLauncher(`C:\old\opencode.ps1`), `powershell -NoProfile -ExecutionPolicy Bypass -File `, "", 1), false},
-		{"launcher for another name", "opencode.cmd", posixLauncher("/old/opencode"), false},
 		{"wrong launcher path", "custom-opencode", posixLauncher("/old/opencode"), false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -840,8 +535,6 @@ func TestIsManagedLauncherRequiresCanonicalGeneratedBytes(t *testing.T) {
 		name, path, content string
 	}{
 		{"posix shell characters", "opencode", posixLauncher("/old path/a'b;$HOME")},
-		{"cmd spaces and quotes", "opencode.cmd", windowsCMDLauncher(`C:\old path\a"b.exe`)},
-		{"powershell apostrophe", "opencode.ps1", windowsPS1Launcher(`C:\old path\a'b.exe`)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if !IsManagedLauncher(tt.path, []byte(tt.content)) {
@@ -862,9 +555,6 @@ func TestIsManagedLauncherRequiresCanonicalGeneratedBytes(t *testing.T) {
 }
 
 func TestActivationRefusesSymlinkedLauncher(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink creation requires privileges not guaranteed on Windows")
-	}
 	home := t.TempDir()
 	launcher := POSIXLauncherPath(home)
 	target := filepath.Join(t.TempDir(), "target")
@@ -877,7 +567,7 @@ func TestActivationRefusesSymlinkedLauncher(t *testing.T) {
 	if err := os.Symlink(target, launcher); err != nil {
 		t.Fatal(err)
 	}
-	options := ActivationOptions{OS: "linux"}
+	options := ActivationOptions{}
 	if plan, err := PrepareDeactivation(home, options); err == nil || plan != nil {
 		t.Fatalf("PrepareDeactivation() plan!=nil=%t error=%v, want non-regular refusal", plan != nil, err)
 	}
@@ -889,52 +579,7 @@ func TestActivationRefusesSymlinkedLauncher(t *testing.T) {
 	}
 }
 
-// A launcher deleted by someone else between revalidation and removal is not
-// this plan's change, so rollback of a later failure must not recreate it.
-func TestDeactivationRollbackDoesNotRecreateConcurrentlyDeletedLauncher(t *testing.T) {
-	home := t.TempDir()
-	first := WindowsCMDPath(home)
-	second := WindowsPS1Path(home)
-	if err := os.MkdirAll(filepath.Dir(first), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(first, []byte(windowsCMDLauncher(`C:\old\opencode.exe`)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(second, []byte(windowsPS1Launcher(`C:\old\opencode.exe`)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	removeErr := errors.New("injected removal failure")
-	plan, err := PrepareDeactivation(home, ActivationOptions{
-		OS: "windows",
-		RemoveFile: func(path string) error {
-			if path == second {
-				return removeErr
-			}
-			if err := os.Remove(path); err != nil {
-				return err
-			}
-			return os.ErrNotExist
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := plan.Apply(); !errors.Is(err, removeErr) {
-		t.Fatalf("Apply() error = %v, want %v", err, removeErr)
-	}
-	if _, err := os.Lstat(first); !os.IsNotExist(err) {
-		t.Fatalf("concurrently deleted launcher = %v, want still absent", err)
-	}
-	if got, err := os.ReadFile(second); err != nil || string(got) != windowsPS1Launcher(`C:\old\opencode.exe`) {
-		t.Fatalf("launcher whose removal failed = %q, %v; want unchanged", got, err)
-	}
-}
-
 func TestRemoveManagedLauncherRemovesOwnedLauncher(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX launcher removal is covered by the Windows handle test on Windows")
-	}
 	home := t.TempDir()
 	path := POSIXLauncherPath(home)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -984,9 +629,6 @@ func TestRemoveManagedLauncherReportsAbsentAndNotOwned(t *testing.T) {
 }
 
 func TestRemoveManagedLauncherRefusesReplacementBeforeCapture(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("replacement fixture relies on POSIX rename semantics")
-	}
 	for _, tt := range []struct {
 		name    string
 		symlink bool
@@ -1049,9 +691,6 @@ func TestRemoveManagedLauncherRefusesReplacementBeforeCapture(t *testing.T) {
 }
 
 func TestRemoveManagedLauncherPreservesReplacementAfterFinalValidation(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("replacement fixture relies on POSIX rename semantics")
-	}
 	for _, tt := range []struct {
 		name    string
 		symlink bool

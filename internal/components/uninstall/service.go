@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -577,14 +576,13 @@ func (s *Service) buildPlan(agentIDs []model.AgentID, componentIDs []model.Compo
 			backupTargets[op.path] = struct{}{}
 			operationsByKey[operationKey(op)] = op
 		}
-		for _, path := range opencodeactivation.LauncherPaths(s.homeDir, runtime.GOOS) {
-			backupTargets[path] = struct{}{}
-			operationsByKey[operationKey(removeOwnedOpenCodeLauncher(path))] = removeOwnedOpenCodeLauncher(path)
-		}
+		launcherPath := opencodeactivation.POSIXLauncherPath(s.homeDir)
+		backupTargets[launcherPath] = struct{}{}
+		operationsByKey[operationKey(removeOwnedOpenCodeLauncher(launcherPath))] = removeOwnedOpenCodeLauncher(launcherPath)
 		// Only profiles that carry the canonical managed block are snapshotted
 		// and rewritten; every other profile byte belongs to the user.
 		for _, path := range opencodeactivation.ManagedProfilePaths(s.homeDir) {
-			if runtime.GOOS == "windows" || !opencodeactivation.HasManagedProfileBlock(path) {
+			if !opencodeactivation.HasManagedProfileBlock(path) {
 				continue
 			}
 			backupTargets[path] = struct{}{}

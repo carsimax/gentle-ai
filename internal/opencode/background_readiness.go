@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 )
 
@@ -76,8 +75,6 @@ func (p *ActivationPlan) effectiveStatus() (ActivationStatus, string) {
 		return ActivationStatusUnsupported, p.capability.Reason
 	case !p.capability.Ready():
 		return ActivationStatusUnknown, p.capability.Reason
-	case p.goos == "windows":
-		return p.windowsStatus()
 	}
 	var overlay map[string][]byte
 	if !p.applied {
@@ -101,28 +98,6 @@ func (p *ActivationPlan) effectiveStatus() (ActivationStatus, string) {
 		return ActivationStatusPending, p.profileReason
 	default:
 		return ActivationStatusPending, resolution.Reason
-	}
-}
-
-// windowsStatus verifies the PATH a new terminal inherits (machine then user
-// entries) rather than this process's PATH, which activation itself changed.
-func (p *ActivationPlan) windowsStatus() (ActivationStatus, string) {
-	binDir := BinDir(p.homeDir)
-	if !p.applied {
-		return ActivationStatusPending, fmt.Sprintf("managed OpenCode launcher activation is prepared but not applied; it adds %s to the user PATH", binDir)
-	}
-	pathValue, err := p.options.NewShellPath()
-	if err != nil {
-		return ActivationStatusUnknown, fmt.Sprintf("managed OpenCode launcher was written, but the PATH new terminals inherit could not be read: %v", err)
-	}
-	launcher, err := ResolveManagedLauncher(p.homeDir, pathValue, "windows")
-	switch {
-	case err == nil:
-		return ActivationStatusReady, fmt.Sprintf("new terminals resolve opencode to the managed launcher %s; open a new terminal and restart OpenCode", launcher)
-	case errors.Is(err, ErrManagedLauncherShadowed):
-		return ActivationStatusShadowed, fmt.Sprintf("%v on the PATH new terminals inherit; move %s ahead of that directory in your PATH, then open a new terminal", err, binDir)
-	default:
-		return ActivationStatusPending, err.Error()
 	}
 }
 
@@ -165,8 +140,8 @@ func resolveLoginShell(homeDir string, options ActivationOptions, overlay map[st
 		return LoginShellResolution{Status: ActivationStatusUnknown, Reason: fmt.Sprintf("new login shells were not verified because %s; in a new login shell, run `command -v opencode` and confirm it prints %s, or add %s to that shell's startup file", unmodeled, launcher, ProfileExportLine(binDir))}
 	}
 
-	model := newStartupPathModel(homeDir, options.OS, overlay)
-	for _, entry := range splitPath(options.Path, options.OS) {
+	model := newStartupPathModel(homeDir, overlay)
+	for _, entry := range splitPath(options.Path) {
 		if filepath.IsAbs(entry) {
 			model.entries = append(model.entries, startupPathEntry{dir: entry, source: inheritedPathSource})
 		}
@@ -175,7 +150,7 @@ func resolveLoginShell(homeDir string, options ActivationOptions, overlay map[st
 		model.replay(file, file, 0)
 	}
 
-	resolution := model.resolve(launcher, options.OS, assumeLauncher)
+	resolution := model.resolve(launcher, assumeLauncher)
 	if resolution.Status != ActivationStatusReady && resolution.Status != ActivationStatusShadowed {
 		return resolution
 	}
@@ -187,26 +162,26 @@ func resolveLoginShell(homeDir string, options ActivationOptions, overlay map[st
 
 // resolve finds the executable a new shell runs for `opencode` on the modeled
 // PATH.
-func (m *startupPathModel) resolve(launcher, goos string, assumeLauncher bool) LoginShellResolution {
+func (m *startupPathModel) resolve(launcher string, assumeLauncher bool) LoginShellResolution {
 	binDir := m.binDir
 	for _, entry := range m.entries {
 		candidate := filepath.Join(entry.dir, "opencode")
-		managedDir := samePath(entry.dir, binDir, goos)
-		if !managedDir && !pathEntryExecutable(candidate, goos) {
+		managedDir := samePath(entry.dir, binDir)
+		if !managedDir && !pathEntryExecutable(candidate) {
 			continue
 		}
 		// A link into the managed directory runs the launcher as well.
-		if managedDir || resolvesUnder(candidate, binDir, goos) {
+		if managedDir || resolvesUnder(candidate, binDir) {
 			if assumeLauncher && managedDir {
 				return readyLoginShell(launcher, entry.source)
 			}
-			if _, err := validateManagedLauncherCandidate(m.homeDir, launcher, goos); err != nil {
+			if _, err := validateManagedLauncherCandidate(m.homeDir, launcher); err != nil {
 				return LoginShellResolution{Status: ActivationStatusPending, Source: entry.source, Reason: fmt.Sprintf("new login shells put %s on PATH, but %v; run gentle-ai sync", binDir, err)}
 			}
 			return readyLoginShell(launcher, entry.source)
 		}
 		result := LoginShellResolution{Resolved: candidate, Source: entry.source}
-		if !m.contains(binDir, goos) {
+		if !m.contains(binDir) {
 			result.Status = ActivationStatusPending
 			result.Reason = fmt.Sprintf("new login shells do not put %s on PATH, so opencode resolves to %s", binDir, candidate)
 			return result
@@ -239,7 +214,7 @@ func loginShellStartupFiles(homeDir string, options ActivationOptions) ([]string
 	case "zsh":
 		dir := homeDir
 		files := []string{filepath.Join(homeDir, ".zshenv")}
-		if options.ZDotDir != "" && !samePath(options.ZDotDir, homeDir, options.OS) {
+		if options.ZDotDir != "" && !samePath(options.ZDotDir, homeDir) {
 			dir = options.ZDotDir
 			files = append(files, filepath.Join(dir, ".zshenv"))
 		}
@@ -251,14 +226,9 @@ func loginShellStartupFiles(homeDir string, options ActivationOptions) ([]string
 		if reason != "" {
 			return nil, reason
 		}
-		files := []string{profile}
 		// macOS terminals start login shells, which read .bashrc only when the
-		// profile sources it. Other terminals start interactive non-login
-		// shells that read .bashrc on top of the session PATH.
-		if options.OS != "darwin" {
-			files = append(files, filepath.Join(homeDir, ".bashrc"))
-		}
-		return files, ""
+		// profile sources it.
+		return []string{profile}, ""
 	case "sh", "dash", "ksh":
 		return []string{filepath.Join(homeDir, ".profile")}, ""
 	default:
@@ -278,7 +248,6 @@ func loginShellStartupFiles(homeDir string, options ActivationOptions) ([]string
 type startupPathModel struct {
 	homeDir string
 	binDir  string
-	goos    string
 	overlay map[string][]byte
 	entries []startupPathEntry
 	vars    map[string]string
@@ -316,13 +285,13 @@ const (
 	maxStartupFileSize    = 1 << 20
 )
 
-func newStartupPathModel(homeDir, goos string, overlay map[string][]byte) *startupPathModel {
-	return &startupPathModel{homeDir: homeDir, binDir: BinDir(homeDir), goos: goos, overlay: overlay, placedSeq: -1, pathFunctions: map[string]bool{}}
+func newStartupPathModel(homeDir string, overlay map[string][]byte) *startupPathModel {
+	return &startupPathModel{homeDir: homeDir, binDir: BinDir(homeDir), overlay: overlay, placedSeq: -1, pathFunctions: map[string]bool{}}
 }
 
-func (m *startupPathModel) contains(dir, goos string) bool {
+func (m *startupPathModel) contains(dir string) bool {
 	for _, entry := range m.entries {
-		if samePath(entry.dir, dir, goos) {
+		if samePath(entry.dir, dir) {
 			return true
 		}
 	}
@@ -331,7 +300,7 @@ func (m *startupPathModel) contains(dir, goos string) bool {
 
 // note records a construct in source that may change PATH unpredictably.
 func (m *startupPathModel) note(source, construct string) {
-	m.uncertainties = append(m.uncertainties, startupUncertainty{seq: m.seq, managedPresent: m.contains(m.binDir, m.goos), source: source, construct: construct})
+	m.uncertainties = append(m.uncertainties, startupUncertainty{seq: m.seq, managedPresent: m.contains(m.binDir), source: source, construct: construct})
 }
 
 // relevantUncertainty returns the first unmodeled construct that runs after
@@ -666,7 +635,7 @@ func (m *startupPathModel) appendSegment(next []startupPathEntry, segment, sourc
 	default:
 		// Only a prepend places the managed directory ahead of the existing
 		// PATH; an append after it leaves earlier uncertainties relevant.
-		if samePath(segment, m.binDir, m.goos) && len(next) == 0 {
+		if samePath(segment, m.binDir) && len(next) == 0 {
 			m.placedSeq = m.seq
 		}
 		return append(next, startupPathEntry{dir: filepath.Clean(segment), source: source})
@@ -895,69 +864,40 @@ func shellWords(command string) []string {
 // ResolveManagedLauncher resolves the first OpenCode executable in pathValue
 // with exec.LookPath's PATH semantics, without consulting the process PATH,
 // and verifies it is a Gentle-owned launcher in the managed bin directory.
-// A different executable first wraps ErrManagedLauncherShadowed.
-func ResolveManagedLauncher(homeDir, pathValue, goos string) (string, error) {
-	if goos == "" {
-		goos = runtime.GOOS
-	}
-	return resolveManagedLauncher(homeDir, pathValue, goos, false)
+// A different executable first wraps ErrManagedLauncherShadowed. The goos
+// argument is ignored (darwin/arm64 only) and remains until internal/cli
+// drops it.
+func ResolveManagedLauncher(homeDir, pathValue, _ string) (string, error) {
+	return resolveManagedLauncher(homeDir, pathValue, false)
 }
 
-func resolveManagedLauncher(homeDir, pathValue, goos string, assumeLauncher bool) (string, error) {
+func resolveManagedLauncher(homeDir, pathValue string, assumeLauncher bool) (string, error) {
 	binDir := BinDir(homeDir)
-	if goos == "windows" && runtime.GOOS == "windows" {
-		// Windows command lookup probes the current directory first unless
-		// NoDefaultCurrentDirectoryInExePath is set.
-		if _, disabled := os.LookupEnv("NoDefaultCurrentDirectoryInExePath"); !disabled {
-			if candidate, ok := firstOpenCodeExecutable(".", goos); ok {
-				return "", fmt.Errorf("opencode resolves through the current directory %q: %w", candidate, exec.ErrDot)
-			}
-		}
-	}
-	for _, entry := range splitPath(pathValue, goos) {
+	for _, entry := range splitPath(pathValue) {
 		if entry == "" {
-			if goos == "windows" {
-				continue
-			}
 			// An empty POSIX PATH entry means the current directory.
 			entry = "."
 		}
-		if assumeLauncher && samePath(entry, binDir, goos) {
-			return ManagedLauncherPaths(homeDir, goos)[0], nil
+		if assumeLauncher && samePath(entry, binDir) {
+			return POSIXLauncherPath(homeDir), nil
 		}
-		candidate, ok := firstOpenCodeExecutable(entry, goos)
-		if !ok {
+		candidate := filepath.Join(entry, "opencode")
+		if !pathEntryExecutable(candidate) {
 			continue
 		}
 		if !filepath.IsAbs(candidate) {
 			return "", fmt.Errorf("opencode resolves through relative PATH entry %q: %w", entry, exec.ErrDot)
 		}
-		if !samePath(filepath.Dir(candidate), binDir, goos) {
+		if !samePath(filepath.Dir(candidate), binDir) {
 			return "", fmt.Errorf("%w by %s", ErrManagedLauncherShadowed, candidate)
 		}
-		return validateManagedLauncherCandidate(homeDir, candidate, goos)
+		return validateManagedLauncherCandidate(homeDir, candidate)
 	}
 	return "", fmt.Errorf("no OpenCode executable on PATH resolves to the managed launcher in %s", binDir)
 }
 
-func firstOpenCodeExecutable(entry, goos string) (string, bool) {
-	for _, name := range targetNames(goos) {
-		candidate := filepath.Join(entry, name)
-		if pathEntryExecutable(candidate, goos) {
-			return candidate, true
-		}
-	}
-	return "", false
-}
-
-func validateManagedLauncherCandidate(homeDir, candidate, goos string) (string, error) {
-	managed := false
-	for _, path := range ManagedLauncherPaths(homeDir, goos) {
-		if samePath(candidate, path, goos) {
-			managed = true
-		}
-	}
-	if !managed {
+func validateManagedLauncherCandidate(homeDir, candidate string) (string, error) {
+	if !samePath(candidate, POSIXLauncherPath(homeDir)) {
 		return "", fmt.Errorf("%w by %s", ErrManagedLauncherShadowed, candidate)
 	}
 	snapshot, err := readLauncherSnapshot(candidate)
@@ -967,7 +907,7 @@ func validateManagedLauncherCandidate(homeDir, candidate, goos string) (string, 
 	if !snapshot.exists {
 		return "", fmt.Errorf("managed OpenCode launcher %s is missing", candidate)
 	}
-	if goos != "windows" && snapshot.mode&0o111 == 0 {
+	if snapshot.mode&0o111 == 0 {
 		return "", fmt.Errorf("managed OpenCode launcher %s is not executable", candidate)
 	}
 	if !snapshot.owned {
@@ -976,24 +916,24 @@ func validateManagedLauncherCandidate(homeDir, candidate, goos string) (string, 
 	return candidate, nil
 }
 
-func pathEntryExecutable(path, goos string) bool {
+func pathEntryExecutable(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return false
 	}
-	return goos == "windows" || info.Mode().Perm()&0o111 != 0
+	return info.Mode().Perm()&0o111 != 0
 }
 
 // resolvesUnder reports whether path resolves into the existing root, such as
 // a user link to the managed launcher. Resolve both sides so a root alias does
 // not turn a legitimate link into a shadowing executable; fail closed on error.
-func resolvesUnder(path, root, goos string) bool {
+func resolvesUnder(path, root string) bool {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return false
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
-	return err == nil && pathUnder(resolved, resolvedRoot, goos)
+	return err == nil && pathUnder(resolved, resolvedRoot)
 }
 
 // ManagedLauncherTarget returns the OpenCode executable a Gentle-owned
@@ -1009,33 +949,4 @@ func ManagedLauncherTarget(path string) (string, bool) {
 		return "", false
 	}
 	return managedLauncherTarget(path, data)
-}
-
-// windowsTargetSafe reports whether target can be embedded in the generated
-// CMD launcher without cmd.exe reinterpreting it: % expands variables, !
-// expands them under delayed expansion, a quote ends the quoted argument, and
-// control characters split the command.
-func windowsTargetSafe(target string) bool {
-	return !strings.ContainsFunc(target, func(r rune) bool {
-		return r == '%' || r == '!' || r == '"' || r < 0x20 || r == 0x7f
-	})
-}
-
-func windowsExecutableExtensions() []string {
-	pathext := os.Getenv("PATHEXT")
-	if pathext == "" {
-		return []string{".com", ".exe", ".bat", ".cmd"}
-	}
-	var extensions []string
-	for _, extension := range strings.Split(pathext, ";") {
-		extension = strings.ToLower(strings.TrimSpace(extension))
-		if extension == "" {
-			continue
-		}
-		if !strings.HasPrefix(extension, ".") {
-			extension = "." + extension
-		}
-		extensions = append(extensions, extension)
-	}
-	return extensions
 }

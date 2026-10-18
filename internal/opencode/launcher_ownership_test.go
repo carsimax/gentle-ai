@@ -5,24 +5,22 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
 func TestDetectRuntimeMajorDoesNotBypassSymlinkedLauncher(t *testing.T) {
 	home, external := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	name := resolveTargetCandidateName()
+	name := "opencode"
 	wrapper := filepath.Join(external, name)
-	content := launcherContent(runtime.GOOS, filepath.Join(home, "removed", name))[name]
+	content := posixLauncher(filepath.Join(home, "removed", name))
 	if err := os.WriteFile(wrapper, []byte(content), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(BinDir(home), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	symlinkOrSkip(t, wrapper, filepath.Join(BinDir(home), name))
+	mustSymlink(t, wrapper, filepath.Join(BinDir(home), name))
 	realDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(realDir, name), []byte("fixture"), 0o755); err != nil {
 		t.Fatal(err)

@@ -59,7 +59,7 @@ func loginProfile(homeDir string, options ActivationOptions) (string, string) {
 	shell := filepath.Base(options.Shell)
 	switch shell {
 	case "zsh":
-		if options.ZDotDir != "" && !samePath(options.ZDotDir, homeDir, options.OS) {
+		if options.ZDotDir != "" && !samePath(options.ZDotDir, homeDir) {
 			return "", fmt.Sprintf("zsh reads its login profile from ZDOTDIR %q, which Gentle AI does not manage", options.ZDotDir)
 		}
 		return filepath.Join(homeDir, ".zprofile"), ""

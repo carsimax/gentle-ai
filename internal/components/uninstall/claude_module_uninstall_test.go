@@ -3,7 +3,6 @@ package uninstall
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -138,9 +137,6 @@ func TestClaudeUninstallRetiresModulePilotOnlyOnFullRemoval(t *testing.T) {
 		t.Fatalf("core is not user text, monolith and unchanged routing:\n%s", core)
 	}
 	wantMode := os.FileMode(0o600)
-	if runtime.GOOS == "windows" {
-		wantMode = 0o666 // Windows reports only the read-only attribute.
-	}
 	if info, err := os.Stat(corePath); err != nil || info.Mode().Perm() != wantMode {
 		t.Fatalf("core mode changed: %v, %v", info.Mode(), err)
 	}
