@@ -59,6 +59,11 @@ func CheckFiltered(ctx context.Context, currentVersion string, profile system.Pl
 // checkSingleTool checks a single tool: detects local version, fetches remote, compares.
 func checkSingleTool(ctx context.Context, tool ToolInfo, currentBuildVersion string, profile system.PlatformProfile) UpdateResult {
 	result := UpdateResult{Tool: tool}
+	if tool.Name == "gentle-ai" && IsForkBuild(currentBuildVersion) {
+		result.InstalledVersion = currentBuildVersion
+		result.Status = DevBuild
+		return result
+	}
 	homebrewOwnership := HomebrewNone
 	if profile.PackageManager == "brew" {
 		var err error

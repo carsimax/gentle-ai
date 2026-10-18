@@ -389,7 +389,6 @@ func TestDocumentedInvocationsRunAsDocumented(t *testing.T) {
 	}
 	// Secondary live guides must not promise the removed SDD workflow.
 	for name, retiredClaims := range map[string][]string{
-		"CONTRIBUTING.md":                      {"Delivery Strategy for SDD Changes", "Before `sdd-apply` starts"},
 		"docs/codebase/sync-and-cloud.md":      {"Default sync scope includes SDD", "OpenCode SDD profile flags"},
 		"docs/codebase/integrations.md":        {"| SDD assets |"},
 		"docs/codebase/maintainer-playbook.md": {"| SDD workflow |"},

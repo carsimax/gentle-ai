@@ -14,7 +14,7 @@ Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runn
 - S6: Runtime guard: the binary refuses to run on any platform other than `darwin/arm64` with a clear message.
 - S7: Fork tooling: `fork/removed-paths.txt` manifest and `scripts/port-upstream.sh` that lists pending upstream PRs from `main` since the last `upstream-synced/*` tag, skips PRs touching only removed paths, and resolves modify/delete conflicts on removed paths.
 - S8: `FORK.md` documents the cherry-pick flow and the macOS-only scope, replacing the merge-based release intake section.
-- S9 (open decision): fork version scheme and upstream update notice. Assumption pending user answer.
+- S9: Fork version scheme "numeroacion propoa cmx-1.0.0" (user chose option B: semver-compatible `<upstream base>-cmx.<fork version>`, e.g. `4.2.0-cmx.1.0.0`, from `fork/VERSION`); fork builds never offer upstream releases.
 
 ## Tasks
 
@@ -24,7 +24,7 @@ Branch: `feat/macos-arm64-only` (from `cmx`). Delivery: `ask-on-risk`. Test runn
 | T2 | S4, S5 | inline | done | f2512374 |
 | T3 | S6 | inline | done: RED (undefined ensureForkPlatform) then GREEN; darwin/amd64 rejected under Rosetta | 94ee1a4b |
 | T4 | S2, S7, S8 | inline | done: scripts/test-port-upstream.sh 11/11 PASS (found and fixed empty-commit bug) | 602b5072 |
-| T5 | S9 | inline | blocked on decision | |
+| T5 | S9 | inline | done: RED (undefined IsForkBuild; self-update check called) then GREEN; install-fork builds 4.2.0-cmx.1.0.0 | (this commit) |
 | T6 | S4 | inline | done: assets tests green | 10e8131c |
 | T7a | S10 | delegated (parallel) | done: engram | 3acb687a |
 | T7b | S10 | delegated (parallel) | done: reviewtransaction + reviewerprovider + cli/review_* | d9bf394b |
@@ -54,3 +54,4 @@ Route evidence: no Writer trigger (units depend on each other's deletions; no pa
 - L14: T7f kept the non-Homebrew engram download branch (macOS without brew, also used by upgrade) and rebaselined the Linux-only orchestrator module tests on darwin (only install paths changed, content bytes identical). Ratchet baseline lost 2 STALE entries.
 - L15: Full suite (`COUNT=1 scripts/test-fast.sh`) green except baseline failures L7. Remaining "Windows"/"Linux" text in production Go is rationale comments, recoverytrace history rows, and input validation kept on purpose (pi windowsDrivePath, backup `..\..` traversal, risk `.ps1` classification).
 - L16: Differential old (cmx) vs new binary with isolated HOME: only the version string differs for --help, version, install/sync --dry-run, doctor --help, review mode status. Native review assessed high for 54056 lines; user chose "Omitir esta vez" (declined_this_candidate). Open: S9 version scheme.
+- L17 (2026-10-18): "numeroacion propoa cmx-1.0.0 solo espera que el otro agente termine de ejecutar sus test"; then "qu es mejor" -> recommended B because plain `cmx-1.0.0` fails the OpenCode review plugin semver >= 2.0.0 check and the update check reads it as 1.0.0 and offers upstream 4.x forever.

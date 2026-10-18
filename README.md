@@ -280,32 +280,8 @@ Then use your agent normally. Your configs are snapshotted before every write, a
 | **[ODD](docs/usage.md#organic-driven-development-odd)** · **[Routing](docs/trigger-rules.md)** | Everyday direct and delegated work |
 | **[Review](docs/review-integration.md)** · **[Architecture](docs/architecture/organic-rdd.md)** | The RDD contract, lifecycle and threat model |
 | **[Engram](docs/engram.md)** · **[Components](docs/components.md)** | Memory commands, skills, presets and personas |
-| **[Contributing](CONTRIBUTING.md)** · **[Codebase Guide](docs/CODEBASE-GUIDE.md)** | Extend or contribute |
+| **[Codebase Guide](docs/CODEBASE-GUIDE.md)** | Extend the codebase |
 | **[Telemetry](docs/telemetry.md)** | What we count, and how to turn it off |
-
-<div align="right"><a href="#top">Back to top</a></div>
-
-<div align="center"><img src="docs/assets/brand/rose.png" width="28" alt="" /></div>
-
-## Community
-
-Everything labelled [`up-for-grabs`](https://github.com/Gentleman-Programming/gentle-ai/issues?q=is%3Aissue+is%3Aopen+label%3Aup-for-grabs) is scoped, approved and unclaimed — pick one and it's yours.
-
-<div align="center">
-
-<a href="docs/community-roadmap.md"><img src="https://img.shields.io/badge/Community%20Roadmap-F095C8?style=for-the-badge&labelColor=1A1218&logo=readthedocs&logoColor=F095C8" alt="Community Roadmap"></a>
-<a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributing%20Guide-F095C8?style=for-the-badge&labelColor=1A1218&logo=git&logoColor=F095C8" alt="Contributing Guide"></a>
-<a href="CONTRIBUTORS.md"><img src="https://img.shields.io/badge/Contributors-D7A0B8?style=for-the-badge&labelColor=1A1218&logo=github&logoColor=D7A0B8" alt="Contributors"></a>
-
-<br/><br/>
-
-<a href="CONTRIBUTORS.md">
-  <img width="100%" src="https://contrib.rocks/image?repo=Gentleman-Programming/gentle-ai&columns=16" alt="Gentle-AI contributors" />
-</a>
-
-<p><sub>This project exists because of these people.</sub></p>
-
-</div>
 
 <div align="right"><a href="#top">Back to top</a></div>
 

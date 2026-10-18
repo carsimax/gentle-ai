@@ -94,8 +94,8 @@ func selfUpdate(ctx context.Context, version string, profile system.PlatformProf
 		return nil
 	}
 
-	// Guard 3: dev build — no meaningful version to compare.
-	if version == "dev" {
+	// Guard 3: dev or fork build — no upstream release applies.
+	if version == "dev" || update.IsForkBuild(version) {
 		return nil
 	}
 

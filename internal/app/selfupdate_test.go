@@ -111,6 +111,21 @@ func TestSelfUpdate_SkipWhenDevVersion(t *testing.T) {
 	}
 }
 
+func TestSelfUpdate_SkipWhenForkBuild(t *testing.T) {
+	unsetEnv(t, envNoSelfUpdate)
+	unsetEnv(t, envSelfUpdateDone)
+
+	stubs := swapSelfUpdateDeps(t, nil, upgrade.UpgradeReport{})
+
+	err := selfUpdate(context.Background(), "4.2.0-cmx.1.0.0", stubProfile(), io.Discard)
+	if err != nil {
+		t.Fatalf("selfUpdate returned error: %v", err)
+	}
+	if stubs.checkCalled != 0 {
+		t.Errorf("expected no check call for fork build, got %d", stubs.checkCalled)
+	}
+}
+
 func TestSelfUpdate_SkipWhenOptOut(t *testing.T) {
 	setEnv(t, envNoSelfUpdate, "1")
 	unsetEnv(t, envSelfUpdateDone)

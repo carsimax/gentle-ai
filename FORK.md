@@ -40,9 +40,23 @@ gentle-ai sync               # re-aplica configs y skills a los agentes con esta
 ```
 
 - `~/go/bin` debe estar en el `PATH` antes que cualquier otra instalación (Homebrew, install.sh).
-- La versión es `<último tag>-cmx.<commit>`; termina en `.dirty` si había cambios sin commit.
-- **No uses `gentle-ai upgrade`**: reemplazaría tu build con la release oficial.
-  Cuando avise de una versión nueva, porta las novedades (ver abajo) y vuelve a correr el script.
+- La versión es `<base upstream>-cmx.<versión del fork>`, por ejemplo `4.2.0-cmx.1.0.0`;
+  termina en `.dirty` si había cambios sin commit.
+- Las builds del fork **nunca** ofrecen la release oficial: ni al arrancar, ni en la TUI, ni con
+  `gentle-ai upgrade` (`internal/update/fork.go`). Para traer novedades, pórtalas (ver abajo).
+
+## Versión del fork
+
+La numeración propia vive en `fork/VERSION` (`MAJOR.MINOR.PATCH`, hoy `1.0.0`) y se lee como
+**cmx-1.0.0**. El binario la reporta como `4.2.0-cmx.1.0.0`:
+
+- `4.2.0` es la base upstream: el tag `v*` más reciente en la historia de `cmx`. Mantiene la
+  versión como semver válido y mayor o igual a 2.0.0, que el plugin de revisión de OpenCode exige.
+- `cmx.1.0.0` es la versión del fork.
+
+Para publicar una versión nueva: sube `fork/VERSION` (PATCH para arreglos, MINOR para
+funciones, MAJOR para cambios incompatibles), haz commit en `cmx` y etiqueta ese commit
+`git tag cmx-<versión>`.
 
 ## Flujo diario
 
