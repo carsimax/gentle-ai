@@ -13,8 +13,8 @@ Este archivo explica cómo está organizado y cómo traer novedades del original
 ## Ramas
 
 - **`main`** — espejo exacto de `upstream/main`. **Nunca se hacen commits aquí.**
-- **`mi-version`** — rama con mis adecuaciones. Es la rama por defecto del fork.
-- **`feat/...`, `fix/...`** — ramas de trabajo que salen de `mi-version` y se integran de vuelta a ella.
+- **`cmx`** — rama con mis adecuaciones. Es la rama por defecto del fork.
+- **`feat/...`, `fix/...`** — ramas de trabajo que salen de `cmx` y se integran de vuelta a ella.
 
 ## Configuración en una máquina nueva
 
@@ -28,16 +28,16 @@ git config rerere.enabled true      # recuerda resoluciones de conflictos
 git config rerere.autoupdate true
 git config alias.sync-main '!git fetch upstream --tags && git checkout main && git merge --ff-only upstream/main && git push origin main'
 git config alias.latest-release '!git fetch upstream --tags -q && git tag --sort=-creatordate | head -1'
-git checkout mi-version
+git checkout cmx
 ```
 
 ## Flujo diario
 
 ```bash
-git checkout mi-version
+git checkout cmx
 git checkout -b feat/mi-cambio
 # ... trabajar, commits chicos ...
-git checkout mi-version
+git checkout cmx
 git merge feat/mi-cambio
 git push
 ```
@@ -47,14 +47,14 @@ git push
 ```bash
 git sync-main                # actualiza main con upstream y la sube a mi fork
 git latest-release           # muestra el tag más reciente (ej. v4.2.0)
-git checkout mi-version
+git checkout cmx
 git merge v4.2.0             # o: git merge upstream/main para lo más reciente
 # resolver conflictos si aparecen, luego:
 go test ./...
 git push
 ```
 
-**Se usa `merge`, no `rebase`**: `mi-version` está publicada, y el rebase reescribe la
+**Se usa `merge`, no `rebase`**: `cmx` está publicada, y el rebase reescribe la
 historia (obliga a `push --force`) y hace resolver los conflictos commit por commit.
 
 Si un merge sale mal antes de hacer commit: `git merge --abort`.
