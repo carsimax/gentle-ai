@@ -7,6 +7,11 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
+if [ "$(uname -s)" != "Darwin" ] || [ "$(uname -m)" != "arm64" ]; then
+  echo "install-fork.sh: only macOS on Apple Silicon (Darwin arm64) is supported" >&2
+  exit 1
+fi
+
 base="$(git describe --tags --abbrev=0 | sed 's/^v//')"
 commit="$(git rev-parse --short HEAD)"
 dirty=""

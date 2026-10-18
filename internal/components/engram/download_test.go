@@ -1400,8 +1400,8 @@ func TestStopEngramProcessesUsesPowerShellResolver(t *testing.T) {
 }
 
 // TestSHA256ChecksumContract verifies that the SHA256 hex digest format produced
-// by the Go installer matches the format expected by the PowerShell fallback in
-// scripts/install.ps1. This is a contract test that ensures both implementations
+// by the Go installer matches the format expected by the PowerShell fallback
+// formerly shipped in scripts/install.ps1. This is a contract test that ensures both implementations
 // produce compatible checksums for verification.
 //
 // The PowerShell fallback uses .NET cryptography when Get-FileHash is unavailable:

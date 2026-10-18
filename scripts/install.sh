@@ -124,17 +124,12 @@ detect_platform() {
     uname_os="$(uname -s)"
     uname_arch="$(uname -m)"
 
-    case "$uname_os" in
-        Darwin) OS="darwin"; OS_LABEL="macOS"; GORELEASER_OS="darwin" ;;
-        Linux)  OS="linux";  OS_LABEL="Linux"; GORELEASER_OS="linux" ;;
-        *)      fatal "Unsupported OS: $uname_os. Only macOS and Linux are supported." ;;
-    esac
-
-    case "$uname_arch" in
-        x86_64|amd64)   ARCH="amd64" ;;
-        arm64|aarch64)  ARCH="arm64" ;;
-        *)              fatal "Unsupported architecture: $uname_arch. Only amd64 and arm64 are supported." ;;
-    esac
+    # This fork supports only macOS on Apple Silicon.
+    if [ "$uname_os" != "Darwin" ] || { [ "$uname_arch" != "arm64" ] && [ "$uname_arch" != "aarch64" ]; }; then
+        fatal "Unsupported platform: $uname_os/$uname_arch. Only macOS on Apple Silicon (Darwin arm64) is supported."
+    fi
+    OS="darwin"; OS_LABEL="macOS"; GORELEASER_OS="darwin"
+    ARCH="arm64"
 
     success "Platform: ${OS_LABEL} (${OS}/${ARCH})"
 }

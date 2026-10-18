@@ -105,26 +105,6 @@ func TestCompatibilitySkillsRefreshRemovesLegacySharedSkillMarker(t *testing.T) 
 	}
 }
 
-func TestWindowsCompatibilityTransactionKeepsAnchoredRollbackWithoutSDDInjection(t *testing.T) {
-	_, testFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller(0) failed")
-	}
-	sourcePath := filepath.Join(filepath.Dir(testFile), "compatibility_transaction_windows.go")
-	source, err := os.ReadFile(sourcePath)
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", sourcePath, err)
-	}
-
-	if strings.Contains(string(source), "sdd.InjectSkillDirectoryWithCompatibilityWriter") {
-		t.Fatal("Windows compatibility transaction still injects SDD skills")
-	}
-	const rollbackRemoval = "if _, err := t.writer.Remove(path); err != nil {"
-	if !strings.Contains(string(source), rollbackRemoval) {
-		t.Fatalf("Windows compatibility transaction does not consume the anchored remover changed-state result: missing %q", rollbackRemoval)
-	}
-}
-
 func TestRunSyncDryRunMatchesZeroAgentCompatibilityRefresh(t *testing.T) {
 	home := t.TempDir()
 	setSyncTestHome(t, home)

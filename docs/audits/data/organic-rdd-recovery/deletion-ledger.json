@@ -853,8 +853,7 @@
     {
       "destinationPath": "internal/reviewtransaction/",
       "destinationProof": [
-        "internal/reviewtransaction/store_test.go",
-        "internal/reviewtransaction/rar_path_safety_windows_test.go"
+        "internal/reviewtransaction/store_test.go"
       ],
       "earlyDeviation": true,
       "noRetainedInvariant": false,

@@ -955,7 +955,6 @@ func retiredPackageRows() []Row {
 			DestinationPath: "internal/reviewtransaction/",
 			DestinationProof: []string{
 				"internal/reviewtransaction/store_test.go",
-				"internal/reviewtransaction/rar_path_safety_windows_test.go",
 			},
 		},
 		{

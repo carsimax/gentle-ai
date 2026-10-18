@@ -391,8 +391,7 @@
     },
     {
       "destinationProof": [
-        "internal/reviewtransaction/store_test.go",
-        "internal/reviewtransaction/rar_path_safety_windows_test.go"
+        "internal/reviewtransaction/store_test.go"
       ],
       "path": "internal/workrun/"
     },
