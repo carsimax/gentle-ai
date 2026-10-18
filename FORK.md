@@ -42,7 +42,7 @@ gentle-ai sync               # re-aplica configs y skills a los agentes con esta
 - `~/go/bin` debe estar en el `PATH` antes que cualquier otra instalación (Homebrew, install.sh).
 - La versión es `<último tag>-cmx.<commit>`; termina en `.dirty` si había cambios sin commit.
 - **No uses `gentle-ai upgrade`**: reemplazaría tu build con la release oficial.
-  Cuando avise de una versión nueva, haz el merge (ver abajo) y vuelve a correr el script.
+  Cuando avise de una versión nueva, porta las novedades (ver abajo) y vuelve a correr el script.
 
 ## Flujo diario
 
@@ -55,31 +55,74 @@ git merge feat/mi-cambio
 git push
 ```
 
-## Traer una release del original
+## Traer novedades del original (cherry-pick)
 
-```bash
-git sync-main                # actualiza main con upstream y la sube a mi fork
-git latest-release           # muestra el tag más reciente (ej. v4.2.0)
-git checkout cmx
-git merge v4.2.0             # o: git merge upstream/main para lo más reciente
-# resolver conflictos si aparecen, luego:
-go test ./...
-git push
-./scripts/install-fork.sh    # reinstalar con la nueva base
+Desde `feat/macos-arm64-only`, `cmx` **ya no mergea** upstream: borró el soporte de
+Windows y Linux, así que cada merge chocaría con esos archivos. Las novedades se
+portan PR por PR con `cherry-pick` desde `main`:
+
+```
+upstream/main ──(ff)──▶ main ──(cherry-pick -x -m 1, por PR)──▶ cmx
 ```
 
-**Se usa `merge`, no `rebase`**: `cmx` está publicada, y el rebase reescribe la
-historia (obliga a `push --force`) y hace resolver los conflictos commit por commit.
+```bash
+git sync-main                          # main = upstream/main (solo fast-forward)
+git checkout cmx
+scripts/port-upstream.sh list          # PRs de main desde el último tag upstream-synced/*
+scripts/port-upstream.sh pick <sha>... # porta los elegidos, en orden
+go build ./... && scripts/test-fast.sh --changed
+scripts/port-upstream.sh mark <sha>    # marca hasta dónde de main ya revisaste
+git push && git push --tags
+./scripts/install-fork.sh
+```
 
-Si un merge sale mal antes de hacer commit: `git merge --abort`.
+`list` marca cada commit de `main` como:
+
+| Estado    | Significado |
+|-----------|-------------|
+| `pending` | Falta portarlo y toca código que el fork conserva. |
+| `skip`    | Solo toca rutas borradas (`fork/removed-paths.txt`); no hace falta portarlo. |
+| `ported`  | `cmx` ya tiene un commit con `cherry picked from commit <sha>`. |
+
+- Porta **por PR completo** (el merge commit), no commits sueltos: así no te
+  saltas un commit del que depende otro.
+- `pick` borra solo las rutas del manifiesto cuando un PR las toca o las vuelve a
+  agregar. Cualquier otro conflicto se resuelve a mano y se sigue con
+  `git cherry-pick --continue`.
+- Si un PR agrega archivos nuevos solo para Windows o Linux con otro nombre,
+  agrégalos a `fork/removed-paths.txt`.
+- Antes del primer tag, `list` revisa desde el punto de corte `4acaf424` (cámbialo con `BASE=<ref>`).
+
+Si un cherry-pick sale mal antes de terminar: `git cherry-pick --abort`.
 
 ## Reglas para minimizar conflictos
 
-1. Tocar lo menos posible los archivos del original; preferir archivos/paquetes nuevos.
-2. Commits pequeños con mensajes claros (para saber qué es mío al resolver conflictos).
-3. Sincronizar seguido, no solo en releases grandes.
+1. No editar ramas `runtime.GOOS` en archivos compartidos: el binario solo compila
+   para `darwin/arm64` y quitarlas solo genera conflictos al portar.
+2. Tocar lo menos posible los archivos del original; preferir archivos/paquetes nuevos.
+3. Commits pequeños con mensajes claros (para saber qué es mío al resolver conflictos).
+4. Portar seguido, no solo en releases grandes.
 4. Si un cambio sirve a todos, proponerlo como PR al original: lo que entra upstream ya no hay que mantenerlo.
 
 ## Estado inicial
 
 Fork creado a partir de `upstream/main` en `4acaf424` (posterior a `v4.2.0`), 2026-10-18.
+
+## Alcance: solo macOS con Apple Silicon
+
+El fork soporta **únicamente macOS en Apple Silicon (`darwin/arm64`)**.
+
+- Se borraron los archivos que nunca compilan en `darwin/arm64`, los instaladores y
+  workflows de Windows y Linux. La lista completa está en `fork/removed-paths.txt`.
+- El binario rechaza cualquier otra plataforma al arrancar (`cmd/gentle-ai/platform_guard.go`),
+  igual que `scripts/install.sh` y `scripts/install-fork.sh`.
+- GoReleaser y CI generan y prueban solo `darwin/arm64` en `macos-14`.
+
+## Alcance: solo Claude Code
+
+Las adecuaciones de este fork son **exclusivamente para Claude Code**. No se
+implementan ni se mantienen cambios para otros agentes (OpenCode, Codex, Pi, Kiro, etc.).
+
+- El código compartido se puede tocar, pero sin romper a los demás agentes,
+  para que los merges del original sigan limpios.
+- El ciclo rápido de tests de desarrollo se enfoca en los paquetes que afectan a Claude Code.
