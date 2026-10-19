@@ -1,6 +1,10 @@
 package model
 
-import "maps"
+import (
+	"fmt"
+	"maps"
+	"strings"
+)
 
 // ClaudeModelAlias represents one of the Claude model tiers used for
 // per-phase model assignments in the SDD orchestrator.
@@ -105,6 +109,44 @@ type ClaudePhaseAssignment struct {
 // Valid reports whether the model is valid and the effort is supported by it.
 func (a ClaudePhaseAssignment) Valid() bool {
 	return a.Model.Valid() && ClaudeEffortAllowedForModel(a.Model, a.Effort)
+}
+
+// claudeODDRoles are the ODD worker classes the Claude orchestrator delegates
+// through the native Agent tool. They are not installed named agents.
+var claudeODDRoles = []string{"odd-explorer", "odd-worker", "odd-verify"}
+
+// RenderClaudeODDAssignments provides Agent tool `model` arguments for ODD
+// work. The Agent tool takes no effort, so the table is model only. Each role
+// resolves exactly like the installed agents (ResolveClaudePhaseAssignment).
+func RenderClaudeODDAssignments(legacy map[string]ClaudeModelAlias, phases map[string]ClaudePhaseAssignment) string {
+	var b strings.Builder
+	b.WriteString("| ODD worker class | Model |\n|---|---|\n")
+	for _, role := range claudeODDRoles {
+		fmt.Fprintf(&b, "| `%s` | `%s` |\n", role, ResolveClaudePhaseAssignment(legacy, phases, role).Model)
+	}
+	return b.String()
+}
+
+// ResolveClaudePhaseAssignment is the single resolution every Claude consumer
+// shares: the Balanced preset, overridden by legacy model-only assignments and
+// then by valid phase assignments; the role, then "default", then sonnet.
+func ResolveClaudePhaseAssignment(legacy map[string]ClaudeModelAlias, phases map[string]ClaudePhaseAssignment, role string) ClaudePhaseAssignment {
+	merged := ClaudePhaseAssignmentsFromLegacy(ClaudeModelPresetBalanced())
+	for key, value := range ClaudePhaseAssignmentsFromLegacy(legacy) {
+		merged[key] = value
+	}
+	for key, value := range phases {
+		if value.Valid() {
+			merged[key] = value
+		}
+	}
+	if value, ok := merged[role]; ok && value.Valid() {
+		return value
+	}
+	if value, ok := merged["default"]; ok && value.Valid() {
+		return value
+	}
+	return ClaudePhaseAssignment{Model: ClaudeModelSonnet}
 }
 
 // ClaudePhaseAssignmentsFromLegacy converts the historical model-only map into

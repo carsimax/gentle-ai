@@ -620,6 +620,8 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 			codexPhaseModels: r.selection.CodexPhaseModelAssignments,
 			codexEfforts:     r.selection.CodexModelAssignments,
 			codexCarrils:     r.selection.CodexCarrilModelAssignments,
+			claudeModels:     r.selection.ClaudeModelAssignments,
+			claudePhases:     r.selection.ClaudePhaseAssignments,
 			backgroundPolicy: r.backgroundPolicy,
 			legacySDD:        false,
 			id:               "sync:agent-guidance:" + string(agent),
@@ -2280,31 +2282,7 @@ func RunSync(args []string) (SyncResult, error) {
 	// Load persisted model assignments from state when not provided via flags.
 	// Without this, every CLI sync falls back to defaults and would silently
 	// overwrite the user's model choices.
-	if len(selection.ClaudePhaseAssignments) == 0 && len(persistedState.ClaudePhaseAssignments) > 0 {
-		m := make(map[string]model.ClaudePhaseAssignment, len(persistedState.ClaudePhaseAssignments))
-		for k, v := range persistedState.ClaudePhaseAssignments {
-			if k == "orchestrator" {
-				continue
-			}
-			a := model.ClaudePhaseAssignment{Model: model.ClaudeModelAlias(v.Model), Effort: model.ClaudeEffort(v.Effort)}
-			if a.Valid() {
-				m[k] = a
-			}
-		}
-		selection.ClaudePhaseAssignments = m
-	}
-	if len(selection.ClaudeModelAssignments) == 0 && len(selection.ClaudePhaseAssignments) == 0 && len(persistedState.ClaudeModelAssignments) > 0 {
-		m := make(map[string]model.ClaudeModelAlias, len(persistedState.ClaudeModelAssignments))
-		for k, v := range persistedState.ClaudeModelAssignments {
-			// Claude Code controls the main session/orchestrator model itself.
-			// Keep persisted assignments scoped to Agent tool calls only.
-			if k == "orchestrator" {
-				continue
-			}
-			m[k] = model.ClaudeModelAlias(v)
-		}
-		selection.ClaudeModelAssignments = m
-	}
+	restorePersistedClaudeAssignments(&selection, persistedState)
 	if len(selection.KiroModelAssignments) == 0 && len(persistedState.KiroModelAssignments) > 0 {
 		m := make(map[string]model.KiroModelAlias, len(persistedState.KiroModelAssignments))
 		for k, v := range persistedState.KiroModelAssignments {
@@ -2810,4 +2788,35 @@ func runPostSyncVerificationScoped(homeDir, workspaceDir string, scope InstallSc
 	}
 
 	return verify.BuildReport(verify.RunChecks(context.Background(), checks))
+}
+
+// restorePersistedClaudeAssignments fills Claude model assignments the caller
+// did not provide from persisted state, so install and sync render guidance and
+// managed agents from the user's saved choices instead of the defaults.
+func restorePersistedClaudeAssignments(selection *model.Selection, persisted state.InstallState) {
+	if len(selection.ClaudePhaseAssignments) == 0 && len(persisted.ClaudePhaseAssignments) > 0 {
+		m := make(map[string]model.ClaudePhaseAssignment, len(persisted.ClaudePhaseAssignments))
+		for k, v := range persisted.ClaudePhaseAssignments {
+			if k == "orchestrator" {
+				continue
+			}
+			a := model.ClaudePhaseAssignment{Model: model.ClaudeModelAlias(v.Model), Effort: model.ClaudeEffort(v.Effort)}
+			if a.Valid() {
+				m[k] = a
+			}
+		}
+		selection.ClaudePhaseAssignments = m
+	}
+	if len(selection.ClaudeModelAssignments) == 0 && len(selection.ClaudePhaseAssignments) == 0 && len(persisted.ClaudeModelAssignments) > 0 {
+		m := make(map[string]model.ClaudeModelAlias, len(persisted.ClaudeModelAssignments))
+		for k, v := range persisted.ClaudeModelAssignments {
+			// Claude Code controls the main session/orchestrator model itself.
+			// Keep persisted assignments scoped to Agent tool calls only.
+			if k == "orchestrator" {
+				continue
+			}
+			m[k] = model.ClaudeModelAlias(v)
+		}
+		selection.ClaudeModelAssignments = m
+	}
 }

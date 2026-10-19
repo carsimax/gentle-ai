@@ -1,0 +1,38 @@
+# Claude model routing
+
+Objective: make saved Claude model assignments reach ODD delegation, managed review agents, and the in-process reviewer.
+Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx` (user choice, L11), carsimax/gentle-ai#2. Test runner: `go test` (`scripts/test-fast.sh`).
+
+## Specs
+
+- **S1 (upstream #5252, #5550; port of upstream PR #5269, Claude Code only):** "Custom Claude assignments for the ODD roles and "General delegation" are stored in state.json, but no agent file is generated for them in Claude Code. Delegations therefore ignore the configured model and inherit the parent session's model." Expected: "Each configured role is applied when the orchestrator delegates". Fix: render a model-only `Claude ODD worker assignments` table into the Claude routing guidance and instruct the orchestrator to pass it as the Agent tool `model` parameter. The Claude picker asks only for a model on ODD rows. Kiro and Pi changes from #5269 are out of scope.
+- **S2 (Copilot finding on #5269):** "rerunning `gentle-ai install --agent claude-code` rewrites the routing table with the Sonnet fallback even though `mergeExplicitAgentInstallState` later preserves the user's saved Claude assignments, leaving the installed guidance inconsistent with state." Expected: an explicit-agent install renders the table from the persisted Claude assignments.
+- **S3 (upstream #5358):** "the picked model and effort for every RDD row silently fall through to the `default` row (sonnet) in the generated `~/.claude/agents/review-*.md` files." Expected: "`review-risk.md` carries `model: opus` and `effort: max`" when `risk` is assigned `opus`/`max`; same for readability, reliability, resilience, refuter.
+- **S4 (upstream #4275):** the in-process Claude reviewer must not run on the account default model when a review role has no explicit assignment: "the reviewer still falls back to the account default model (Opus 5 1M) and hits the same safeguards refusal." Expected: it resolves role, then `default`, then sonnet, exactly like the installed `review-*.md` files, and always passes `--model`.
+- **S5 (follow-up on #4275):** the Claude picker paints an unassigned row as `sonnet` (display-only). Expected: an unassigned row shows the value it actually resolves to (the `default` row, then sonnet).
+- **S6 (L6, L7):** Claude orchestrator contract: "que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline". Decision (L7): the orchestrator may still read code and query git/gh to decide and route; every file change, test, and build goes to a subagent, even a one-line change. Claude Code only.
+
+## Tasks
+
+| ID | Specs | Route | Status | Commit |
+|---|---|---|---|---|
+| T1 | S1 | inline | done (focused + suite green; 3 pre-existing cmx failures) | see git log |
+| T2 | S2 | inline | done (RED→GREEN; cli suite 20/20 shards) | see git log |
+| T3 | S3, S4, S5 | inline | done (RED→GREEN; suite: only 3 pre-existing cmx failures; vet clean) | see git log |
+| T4 | S6 | — | deferred by user (L9); not part of this PR | |
+
+Route evidence: one understood change per task, no parallel units, no writer reason; independent verifier at feature end (Risk items 3 and 5).
+
+## Log
+
+- **L1 (2026-10-18, user):** "necesito que planeemos un bug que hay en repo original, en claude no se pasan los modelos oa los agentes, revisa las las issues y las prs que en el repo original estan intentando arreglarlo para poder portear directamente esto primero analiza"
+- **L2 (2026-10-18, user):** asked to include #5358 and #4275: "Si incluyelo porfavor."
+- **L3 (2026-10-18, user):** "si vamos con la implementacion"
+- **L4:** #5269 diff applied with `git apply --3way`; only conflict was `RoutingOptions` (fork adds `ClaudeGlobalModules`), resolved keeping both. Kiro/Pi hunks dropped. Installer resolution (Balanced preset base, then legacy, then phase assignments; role, then default, then sonnet) is kept and moved to `model` so every consumer shares it.
+- **L5:** T2 restores saved Claude assignments only for explicit-agent installs (`--agent`), the path whose state merge keeps them; state still persists the caller's selection. Mutation check: persisting the hydrated selection drops the saved `orchestrator` row, and the test catches it.
+- **L6 (2026-10-18, user):** "podemos poner en este cambio algo del contrato?, que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline"
+- **L7 (2026-10-18, user):** answered "Leer para decidir (Recommended)": the orchestrator reads code and queries git/gh to plan and route; every file change, test, and build goes to a subagent, even a one-line change.
+- **L8:** T3 moves the installer resolution to `model.ResolveClaudePhaseAssignment` (Balanced base, legacy, valid phases; role, `default`, sonnet), shared by `review-*.md`, the in-process reviewer, the ODD table, and the picker display. `review-<role>` files read the picker's short key and still honor a valid full-stem key when no short key exists (pinned by `TestTuiSyncClaudePhaseAssignmentsPersistAndGenerateEffort`). The old test that pinned "missing assignment → no `--model`" was rewritten because that is the #4275 defect. `gofmtcheck` flags `internal/cli/review_integration_contract_guard_test.go`, which also fails at `cmx`.
+- **L9 (2026-10-18, user):** "sbes que lo que te pedi de siempre por subagentes de momento no lo implementemos, solo hasta rl arreglo de los subagentes". T4/S6 deferred; no T4 edits were made. Feature closes after T3.
+- **L10:** Native review (RDD) granted by the user: lineage `review-979ef80334841943`, risk high, 4 lenses, base `fcf1592c` (remote `cmx`, so it also covers the unpushed `test-fast` commits). Outcome: approved with no correction; acknowledged (`gentle-ai.review-acknowledged/v1`). Non-blocking advisories: R2-001 `claude_model_picker.go:75-79`, R2-002 `reviewassets/install.go:326-329`, R3-002 (WARNING) `cli/run.go:215-218`, R3-003 `agentguidance/inject.go:120-123`; the rest (R2-003, R3-001, R4-001..003) concern `scripts/test-fast.sh`.
+- **L11 (2026-10-18, user):** "un solo pr". Independent verifier: S1-S5 PASS, no blockers; advisories: the in-process reviewer reads only short keys while `review-*.md` also honors a legacy full-stem key; the short key wins over a stale stem key; the Balanced preset precedes `default` for `jd-*`/`sdd-*`; the restore runs for any `--agent` install. Local `cmx` (3 `test-fast` commits) pushed first at the user's choice; PR carsimax/gentle-ai#2 holds T1-T3 plus docs.

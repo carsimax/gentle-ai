@@ -209,6 +209,13 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 		return InstallResult{}, fmt.Errorf("persist install state preflight: %w", stateErr)
 	}
 	restoreCodexServiceTier(&input.Selection, persistedState)
+	// An explicit-agent install keeps the saved Claude assignments in state, so
+	// it renders from them too. They only feed rendering: state keeps what the
+	// caller selected so persistence and its merge semantics stay unchanged.
+	callerClaudeModels, callerClaudePhases := input.Selection.ClaudeModelAssignments, input.Selection.ClaudePhaseAssignments
+	if len(flags.Agents) > 0 {
+		restorePersistedClaudeAssignments(&input.Selection, persistedState)
+	}
 	background, err := resolveOpenCodeBackgroundCLI(flags.OpenCodeBackgroundSubagentsSet, flags.OpenCodeBackgroundSubagents, persistedState)
 	if err != nil {
 		return InstallResult{}, err
@@ -337,13 +344,13 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 	// merge into the existing state so that previously installed agents and
 	// model assignments are preserved. A full install (no --agent flag) keeps
 	// overwrite semantics so the TUI selection is the source of truth.
-	claudePhaseState := claudePhaseAssignmentsToState(input.Selection.ClaudePhaseAssignments)
+	claudePhaseState := claudePhaseAssignmentsToState(callerClaudePhases)
 	newState := state.InstallState{
 		InstalledAgents:             agentIDs,
 		InstalledBinaryVersion:      AppVersion,
 		CommunityTools:              communityToolIDsToStrings(input.Selection.CommunityTools),
 		CommunityToolsConfigured:    true,
-		ClaudeModelAssignments:      claudeLegacyAssignmentsForState(input.Selection.ClaudeModelAssignments, claudePhaseState),
+		ClaudeModelAssignments:      claudeLegacyAssignmentsForState(callerClaudeModels, claudePhaseState),
 		ClaudePhaseAssignments:      claudePhaseState,
 		KiroModelAssignments:        kiroAliasesToStrings(input.Selection.KiroModelAssignments),
 		CodexModelAssignments:       codexEffortsToStrings(input.Selection.CodexModelAssignments),
@@ -965,6 +972,8 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 			codexPhaseModels: r.selection.CodexPhaseModelAssignments,
 			codexEfforts:     r.selection.CodexModelAssignments,
 			codexCarrils:     r.selection.CodexCarrilModelAssignments,
+			claudeModels:     r.selection.ClaudeModelAssignments,
+			claudePhases:     r.selection.ClaudePhaseAssignments,
 			backgroundPolicy: r.backgroundActivation != nil && r.backgroundActivation.Capability().Ready() && r.background.Effective == model.OpenCodeBackgroundOn,
 			legacySDD:        false,
 			id:               "agent-guidance:" + string(agent),
@@ -1885,6 +1894,8 @@ type agentRoutingGuidanceStep struct {
 	codexPhaseModels map[string]string
 	codexEfforts     map[string]model.CodexEffort
 	codexCarrils     map[string]string
+	claudeModels     map[string]model.ClaudeModelAlias
+	claudePhases     map[string]model.ClaudePhaseAssignment
 	backgroundPolicy bool
 	legacySDD        bool
 	id               string
@@ -2009,6 +2020,10 @@ func (s agentRoutingGuidanceStep) Run() error {
 		options.CodexPhaseModelAssignments = s.codexPhaseModels
 		options.CodexModelAssignments = s.codexEfforts
 		options.CodexCarrilModelAssignments = s.codexCarrils
+	}
+	if s.agent == model.AgentClaudeCode {
+		options.ClaudeModelAssignments = s.claudeModels
+		options.ClaudePhaseAssignments = s.claudePhases
 	}
 	injected, err := agentguidance.InjectRoutingWithOptions(targetDir, s.agent, options)
 	if err != nil {

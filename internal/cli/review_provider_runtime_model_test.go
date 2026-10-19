@@ -47,17 +47,26 @@ func TestClaudeReviewAdapterUsesSavedModelForEachNativeRole(t *testing.T) {
 	}
 }
 
-func TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault(t *testing.T) {
+// Issue #4275: a review role without a valid assignment resolves like the
+// installed review-*.md files (the default row, then sonnet) instead of
+// launching the reviewer without --model on the account default model.
+func TestClaudeReviewAdapterMissingAndInvalidAssignmentsFallBackToDefaultRow(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, persisted := range []state.InstallState{
-		{},
-		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "invalid"}}},
-		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "opus", Effort: "invalid"}}},
-		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "haiku", Effort: "low"}}},
-		{ClaudeModelAssignments: map[string]string{"risk": "invalid"}},
+	sonnet := model.ClaudePhaseAssignment{Model: model.ClaudeModelSonnet}
+	opusHigh := model.ClaudePhaseAssignment{Model: model.ClaudeModelOpus, Effort: model.ClaudeEffortHigh}
+	for _, tc := range []struct {
+		persisted state.InstallState
+		want      model.ClaudePhaseAssignment
+	}{
+		{state.InstallState{}, sonnet},
+		{state.InstallState{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "invalid"}}}, sonnet},
+		{state.InstallState{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "opus", Effort: "invalid"}}}, sonnet},
+		{state.InstallState{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "haiku", Effort: "low"}}}, sonnet},
+		{state.InstallState{ClaudeModelAssignments: map[string]string{"risk": "invalid"}}, sonnet},
+		{state.InstallState{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"default": {Model: "opus", Effort: "high"}}}, opusHigh},
 	} {
-		if err := state.Write(home, persisted); err != nil {
+		if err := state.Write(home, tc.persisted); err != nil {
 			t.Fatal(err)
 		}
 		adapter, err := reviewProviderAdapter(reviewProviderRoleLens, model.AgentClaudeCode, "review-risk")
@@ -65,8 +74,8 @@ func TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault(t *test
 			t.Fatal(err)
 		}
 		claude := adapter.(*reviewerprovider.ClaudeAdapter)
-		if claude.Model != "" || claude.Effort != model.ClaudeEffortDefault {
-			t.Errorf("invalid or absent assignment selected model=%q effort=%q", claude.Model, claude.Effort)
+		if got := (model.ClaudePhaseAssignment{Model: claude.Model, Effort: claude.Effort}); got != tc.want {
+			t.Errorf("state %+v selected %+v, want %+v", tc.persisted, got, tc.want)
 		}
 	}
 	if err := state.Write(home, state.InstallState{ClaudeModelAssignments: map[string]string{"refuter": "sonnet"}}); err != nil {
@@ -110,7 +119,7 @@ func TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault(t *test
 	if err := os.WriteFile(state.Path(home), []byte("invalid JSON"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := savedClaudeReviewAssignment("refuter"); got != (model.ClaudePhaseAssignment{}) {
-		t.Fatalf("invalid persisted state selected %+v", got)
+	if got := savedClaudeReviewAssignment("refuter"); got != sonnet {
+		t.Fatalf("invalid persisted state selected %+v, want sonnet", got)
 	}
 }

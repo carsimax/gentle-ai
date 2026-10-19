@@ -78,35 +78,26 @@ func savedCodexReviewModel(role string) string {
 	return ""
 }
 
-// savedClaudeReviewAssignment never replaces the native transport's defaults
-// for missing or malformed assignments. A valid phase assignment takes priority
-// over the legacy model-only representation, which inherits default effort.
+// savedClaudeReviewAssignment resolves a review role exactly like the
+// installed review-*.md files: the role, then the default row, then sonnet.
+// The reviewer therefore always runs on an explicit model instead of the
+// account default (#4275); unreadable state resolves like an empty one.
 func savedClaudeReviewAssignment(role string) model.ClaudePhaseAssignment {
-	if role == "" {
-		return model.ClaudePhaseAssignment{}
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return model.ClaudePhaseAssignment{}
-	}
-	installed, err := state.Read(home)
-	if err != nil {
-		return model.ClaudePhaseAssignment{}
-	}
-	if assignment, ok := installed.ClaudePhaseAssignments[role]; ok {
-		configured := model.ClaudePhaseAssignment{
-			Model:  model.ClaudeModelAlias(assignment.Model),
-			Effort: model.ClaudeEffort(assignment.Effort),
-		}
-		if configured.Valid() {
-			return configured
+	var installed state.InstallState
+	if home, err := os.UserHomeDir(); err == nil {
+		if read, err := state.Read(home); err == nil {
+			installed = read
 		}
 	}
-	alias := model.ClaudeModelAlias(installed.ClaudeModelAssignments[role])
-	if alias.Valid() {
-		return model.ClaudePhaseAssignment{Model: alias}
+	legacy := make(map[string]model.ClaudeModelAlias, len(installed.ClaudeModelAssignments))
+	for key, value := range installed.ClaudeModelAssignments {
+		legacy[key] = model.ClaudeModelAlias(value)
 	}
-	return model.ClaudePhaseAssignment{}
+	phases := make(map[string]model.ClaudePhaseAssignment, len(installed.ClaudePhaseAssignments))
+	for key, value := range installed.ClaudePhaseAssignments {
+		phases[key] = model.ClaudePhaseAssignment{Model: model.ClaudeModelAlias(value.Model), Effort: model.ClaudeEffort(value.Effort)}
+	}
+	return model.ResolveClaudePhaseAssignment(legacy, phases, role)
 }
 
 var reviewProviderAdapterFor = func(contract reviewerprovider.Contract, agent model.AgentID) (reviewerprovider.Adapter, error) {
