@@ -74,6 +74,11 @@ for arg in "$@"; do
   esac
 done
 
+if [ "$changed" -eq 1 ] && [ "${#patterns[@]}" -gt 0 ]; then
+  echo "--changed cannot be combined with package patterns: ${patterns[*]}" >&2
+  exit 2
+fi
+
 if [ "$changed" -eq 1 ]; then
   packages="$(changed_packages)"
   if [ -z "$packages" ]; then
@@ -97,7 +102,12 @@ add_job() {
 for pkg in $packages; do
   n="$(shards_for "$pkg")"
   [ "$n" -le 1 ] && continue
-  names="$(go test -list . "$pkg" | grep '^Test' || true)"
+  # A package whose tests do not build cannot be listed; run it unsharded so
+  # go test reports the build failure instead of silently dropping it.
+  if ! names="$(go test -list . "$pkg" 2>/dev/null | grep '^Test')"; then
+    add_job "$pkg" ""
+    continue
+  fi
   for i in $(seq 0 $((n - 1))); do
     re="$(echo "$names" | awk -v n="$n" -v i="$i" 'NR % n == i' | paste -sd'|' -)"
     [ -n "$re" ] && add_job "$pkg" "^($re)\$"
