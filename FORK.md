@@ -69,6 +69,30 @@ git merge feat/mi-cambio
 git push
 ```
 
+## Tests
+
+`go test ./...` tal cual **no sirve** aquí: `internal/cli` tiene ~1900 tests secuenciales
+y revienta el timeout de 10 minutos. Usa `scripts/test-fast.sh`, que corre los paquetes en
+paralelo y parte los más lentos en varios procesos (shards):
+
+```bash
+scripts/test-fast.sh --changed         # ciclo diario: paquetes cambiados vs cmx + los que los importan
+scripts/test-fast.sh ./internal/cli    # paquetes concretos
+scripts/test-fast.sh                   # suite completa (~5 min sin caché en M-series de 10 núcleos)
+COUNT=1 scripts/test-fast.sh           # ignora la caché de tests
+JOBS=6 scripts/test-fast.sh            # menos procesos si necesitas la máquina libre
+```
+
+- Cada shard tiene su propia entrada en la caché de `go test`: al repetir, solo corre lo que cambió.
+  Ojo: varios tests de `internal/cli` hacen `stat` de `.git`, así que cualquier comando de git
+  que reescriba el índice (incluso `git status`) invalida la caché de ese paquete.
+- La suite completa ya está limitada por CPU: subir `JOBS` o los shards no la acelera más.
+- Fallos conocidos solo de entorno en esta Mac: los tests de scripts de release en `internal/update`
+  (piden bash 4; macOS trae 3.2) y `TestOwnershipReuseRejectsLedgerWithoutMutation` en
+  `internal/components/reviewassets` (el texto del error JSON cambió en Go 1.27; `go.mod` pide 1.25).
+- Si un paquete nuevo se vuelve lento, agrégalo a `shards_for()` en el script.
+- El cuello de botella restante es `TestReleasedSDDAgentDigestsMatchGenerator` (~140 s, un solo test).
+
 ## Traer novedades del original (cherry-pick)
 
 Desde `feat/macos-arm64-only`, `cmx` **ya no mergea** upstream: borró el soporte de
@@ -138,5 +162,5 @@ Las adecuaciones de este fork son **exclusivamente para Claude Code**. No se
 implementan ni se mantienen cambios para otros agentes (OpenCode, Codex, Pi, Kiro, etc.).
 
 - El código compartido se puede tocar, pero sin romper a los demás agentes,
-  para que los merges del original sigan limpios.
+  para que portar cambios del original siga siendo limpio.
 - El ciclo rápido de tests de desarrollo se enfoca en los paquetes que afectan a Claude Code.
