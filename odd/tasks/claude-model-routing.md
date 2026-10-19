@@ -19,7 +19,7 @@ Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx`,
 | T1 | S1 | inline | done (focused + suite green; 3 pre-existing cmx failures) | see git log |
 | T2 | S2 | inline | done (RED→GREEN; cli suite 20/20 shards) | see git log |
 | T3 | S3, S4, S5 | inline | done (RED→GREEN; suite: only 3 pre-existing cmx failures; vet clean) | see git log |
-| T4 | S6 | inline | pending | |
+| T4 | S6 | — | deferred by user (L9); not part of this PR | |
 
 Route evidence: one understood change per task, no parallel units, no writer reason; independent verifier at feature end (Risk items 3 and 5).
 
@@ -33,3 +33,4 @@ Route evidence: one understood change per task, no parallel units, no writer rea
 - **L6 (2026-10-18, user):** "podemos poner en este cambio algo del contrato?, que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline"
 - **L7 (2026-10-18, user):** answered "Leer para decidir (Recommended)": the orchestrator reads code and queries git/gh to plan and route; every file change, test, and build goes to a subagent, even a one-line change.
 - **L8:** T3 moves the installer resolution to `model.ResolveClaudePhaseAssignment` (Balanced base, legacy, valid phases; role, `default`, sonnet), shared by `review-*.md`, the in-process reviewer, the ODD table, and the picker display. `review-<role>` files read the picker's short key and still honor a valid full-stem key when no short key exists (pinned by `TestTuiSyncClaudePhaseAssignmentsPersistAndGenerateEffort`). The old test that pinned "missing assignment → no `--model`" was rewritten because that is the #4275 defect. `gofmtcheck` flags `internal/cli/review_integration_contract_guard_test.go`, which also fails at `cmx`.
+- **L9 (2026-10-18, user):** "sbes que lo que te pedi de siempre por subagentes de momento no lo implementemos, solo hasta rl arreglo de los subagentes". T4/S6 deferred; no T4 edits were made. Feature closes after T3.
