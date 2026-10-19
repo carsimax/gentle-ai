@@ -463,7 +463,8 @@ func renderCustomPhaseList(state ClaudeModelPickerState, cursor, height int) str
 		focused := idx == cursor
 		assignment := state.CustomAssignments[phase]
 		if !assignment.Model.Valid() {
-			assignment.Model = model.ClaudeModelSonnet
+			// Show what the role actually resolves to at install and review time.
+			assignment = model.ResolveClaudePhaseAssignment(nil, state.CustomAssignments, phase)
 		}
 		if !model.ClaudeEffortAllowedForModel(assignment.Model, assignment.Effort) {
 			assignment.Effort = model.ClaudeEffortDefault

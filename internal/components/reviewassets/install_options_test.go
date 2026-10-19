@@ -315,3 +315,30 @@ func TestNativeAgentModelsAndUnrelatedFiles(t *testing.T) {
 		})
 	}
 }
+
+// Issue #5358: the Claude picker saves review roles under their short keys
+// (risk, refuter, ...) while the managed files are named review-<key>.md.
+func TestClaudeReviewAgentsUsePickerRoleKeys(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentClaudeCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := []string{"risk", "readability", "reliability", "resilience", "refuter"}
+	phases := map[string]model.ClaudePhaseAssignment{}
+	for _, key := range keys {
+		phases[key] = model.ClaudePhaseAssignment{Model: model.ClaudeModelOpus, Effort: model.ClaudeEffortHigh}
+	}
+	home := t.TempDir()
+	if _, err := reviewassets.InstallNativeAgents(home, adapter, reviewassets.InstallOptions{ClaudePhaseAssignments: phases}); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range keys {
+		body, err := os.ReadFile(filepath.Join(adapter.SubAgentsDir(home), "review-"+key+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(body), "model: opus") || !strings.Contains(string(body), "effort: high") {
+			t.Errorf("review-%s.md ignores the saved %q assignment", key, key)
+		}
+	}
+}

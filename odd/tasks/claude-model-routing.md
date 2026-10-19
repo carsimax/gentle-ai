@@ -10,6 +10,7 @@ Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx`,
 - **S3 (upstream #5358):** "the picked model and effort for every RDD row silently fall through to the `default` row (sonnet) in the generated `~/.claude/agents/review-*.md` files." Expected: "`review-risk.md` carries `model: opus` and `effort: max`" when `risk` is assigned `opus`/`max`; same for readability, reliability, resilience, refuter.
 - **S4 (upstream #4275):** the in-process Claude reviewer must not run on the account default model when a review role has no explicit assignment: "the reviewer still falls back to the account default model (Opus 5 1M) and hits the same safeguards refusal." Expected: it resolves role, then `default`, then sonnet, exactly like the installed `review-*.md` files, and always passes `--model`.
 - **S5 (follow-up on #4275):** the Claude picker paints an unassigned row as `sonnet` (display-only). Expected: an unassigned row shows the value it actually resolves to (the `default` row, then sonnet).
+- **S6 (L6, L7):** Claude orchestrator contract: "que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline". Decision (L7): the orchestrator may still read code and query git/gh to decide and route; every file change, test, and build goes to a subagent, even a one-line change. Claude Code only.
 
 ## Tasks
 
@@ -17,7 +18,8 @@ Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx`,
 |---|---|---|---|---|
 | T1 | S1 | inline | done (focused + suite green; 3 pre-existing cmx failures) | see git log |
 | T2 | S2 | inline | done (RED→GREEN; cli suite 20/20 shards) | see git log |
-| T3 | S3, S4, S5 | inline | pending | |
+| T3 | S3, S4, S5 | inline | done (RED→GREEN; suite: only 3 pre-existing cmx failures; vet clean) | see git log |
+| T4 | S6 | inline | pending | |
 
 Route evidence: one understood change per task, no parallel units, no writer reason; independent verifier at feature end (Risk items 3 and 5).
 
@@ -29,3 +31,5 @@ Route evidence: one understood change per task, no parallel units, no writer rea
 - **L4:** #5269 diff applied with `git apply --3way`; only conflict was `RoutingOptions` (fork adds `ClaudeGlobalModules`), resolved keeping both. Kiro/Pi hunks dropped. Installer resolution (Balanced preset base, then legacy, then phase assignments; role, then default, then sonnet) is kept and moved to `model` so every consumer shares it.
 - **L5:** T2 restores saved Claude assignments only for explicit-agent installs (`--agent`), the path whose state merge keeps them; state still persists the caller's selection. Mutation check: persisting the hydrated selection drops the saved `orchestrator` row, and the test catches it.
 - **L6 (2026-10-18, user):** "podemos poner en este cambio algo del contrato?, que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline"
+- **L7 (2026-10-18, user):** answered "Leer para decidir (Recommended)": the orchestrator reads code and queries git/gh to plan and route; every file change, test, and build goes to a subagent, even a one-line change.
+- **L8:** T3 moves the installer resolution to `model.ResolveClaudePhaseAssignment` (Balanced base, legacy, valid phases; role, `default`, sonnet), shared by `review-*.md`, the in-process reviewer, the ODD table, and the picker display. `review-<role>` files read the picker's short key and still honor a valid full-stem key when no short key exists (pinned by `TestTuiSyncClaudePhaseAssignmentsPersistAndGenerateEffort`). The old test that pinned "missing assignment → no `--model`" was rewritten because that is the #4275 defect. `gofmtcheck` flags `internal/cli/review_integration_contract_guard_test.go`, which also fails at `cmx`.

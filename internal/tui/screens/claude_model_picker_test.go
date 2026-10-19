@@ -331,3 +331,24 @@ func TestClaudeODDRowsAreModelOnly(t *testing.T) {
 		t.Fatalf("ODD assignment = %+v, want opus with no effort", got)
 	}
 }
+
+// An unassigned row shows what it resolves to (the default row), not a
+// display-only sonnet the reviewer would never use.
+func TestRenderClaudeModelPicker_UnassignedRowShowsDefaultRow(t *testing.T) {
+	state := NewClaudeModelPickerStateFromPhaseAssignments(map[string]model.ClaudePhaseAssignment{
+		"default": {Model: model.ClaudeModelOpus},
+	})
+	delete(state.CustomAssignments, "risk")
+	state.InCustomMode = true
+
+	out := RenderClaudeModelPicker(state, 0)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "RDD Risk") {
+			if !strings.Contains(line, "[opus]") {
+				t.Errorf("unassigned RDD Risk row = %q, want the default row's [opus]", line)
+			}
+			return
+		}
+	}
+	t.Fatalf("RDD Risk row not rendered:\n%s", out)
+}

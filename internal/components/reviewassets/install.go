@@ -253,7 +253,7 @@ func renderNativeAgent(adapter agents.Adapter, name string, opts InstallOptions)
 		content = strings.ReplaceAll(content, "{{KIRO_MODEL}}", kmr.KiroModelID(alias))
 	}
 	if cmr, ok := adapter.(claudeModelResolver); ok {
-		assignment := resolveClaudeAssignment(opts.ClaudeModelAssignments, opts.ClaudePhaseAssignments, phase)
+		assignment := model.ResolveClaudePhaseAssignment(opts.ClaudeModelAssignments, opts.ClaudePhaseAssignments, claudeAssignmentRole(opts, phase))
 		content = strings.ReplaceAll(content, "{{CLAUDE_MODEL}}", cmr.ClaudeModelID(assignment.Model))
 		effort := ""
 		if assignment.Effort != model.ClaudeEffortDefault && model.ClaudeEffortAllowedForModel(assignment.Model, assignment.Effort) {
@@ -317,23 +317,24 @@ func removeRetiredNativeAgent(journal *mutationjournal.Journal, dir, name string
 	return path, known, nil
 }
 
-func resolveClaudeAssignment(legacy map[string]model.ClaudeModelAlias, phases map[string]model.ClaudePhaseAssignment, phase string) model.ClaudePhaseAssignment {
-	merged := model.ClaudePhaseAssignmentsFromLegacy(model.ClaudeModelPresetBalanced())
-	for key, value := range model.ClaudePhaseAssignmentsFromLegacy(legacy) {
-		merged[key] = value
+// claudeAssignmentRole maps a managed agent file stem to the role key its
+// assignment is saved under. The Claude picker and the in-process reviewer use
+// short keys for the review lenses and the refuter (#5358); a valid assignment
+// saved under the full file stem is still honored when no short key exists.
+func claudeAssignmentRole(opts InstallOptions, phase string) string {
+	short := strings.TrimPrefix(phase, "review-")
+	switch short {
+	case "risk", "readability", "reliability", "resilience", "refuter":
+	default:
+		return phase
 	}
-	for key, value := range phases {
-		if value.Valid() {
-			merged[key] = value
-		}
+	saved := func(key string) bool {
+		return opts.ClaudePhaseAssignments[key].Valid() || opts.ClaudeModelAssignments[key].Valid()
 	}
-	if value, ok := merged[phase]; ok && value.Valid() {
-		return value
+	if !saved(short) && saved(phase) {
+		return phase
 	}
-	if value, ok := merged["default"]; ok && value.Valid() {
-		return value
-	}
-	return model.ClaudePhaseAssignment{Model: model.ClaudeModelSonnet}
+	return short
 }
 
 func replaceJudgmentSection(content, body string) string {
