@@ -1,7 +1,7 @@
 # Claude model routing
 
 Objective: make saved Claude model assignments reach ODD delegation, managed review agents, and the in-process reviewer.
-Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx`, re-evaluated if the running count exceeds ~400 lines. Test runner: `go test` (`scripts/test-fast.sh`).
+Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx` (user choice, L11), carsimax/gentle-ai#2. Test runner: `go test` (`scripts/test-fast.sh`).
 
 ## Specs
 
@@ -35,3 +35,4 @@ Route evidence: one understood change per task, no parallel units, no writer rea
 - **L8:** T3 moves the installer resolution to `model.ResolveClaudePhaseAssignment` (Balanced base, legacy, valid phases; role, `default`, sonnet), shared by `review-*.md`, the in-process reviewer, the ODD table, and the picker display. `review-<role>` files read the picker's short key and still honor a valid full-stem key when no short key exists (pinned by `TestTuiSyncClaudePhaseAssignmentsPersistAndGenerateEffort`). The old test that pinned "missing assignment → no `--model`" was rewritten because that is the #4275 defect. `gofmtcheck` flags `internal/cli/review_integration_contract_guard_test.go`, which also fails at `cmx`.
 - **L9 (2026-10-18, user):** "sbes que lo que te pedi de siempre por subagentes de momento no lo implementemos, solo hasta rl arreglo de los subagentes". T4/S6 deferred; no T4 edits were made. Feature closes after T3.
 - **L10:** Native review (RDD) granted by the user: lineage `review-979ef80334841943`, risk high, 4 lenses, base `fcf1592c` (remote `cmx`, so it also covers the unpushed `test-fast` commits). Outcome: approved with no correction; acknowledged (`gentle-ai.review-acknowledged/v1`). Non-blocking advisories: R2-001 `claude_model_picker.go:75-79`, R2-002 `reviewassets/install.go:326-329`, R3-002 (WARNING) `cli/run.go:215-218`, R3-003 `agentguidance/inject.go:120-123`; the rest (R2-003, R3-001, R4-001..003) concern `scripts/test-fast.sh`.
+- **L11 (2026-10-18, user):** "un solo pr". Independent verifier: S1-S5 PASS, no blockers; advisories: the in-process reviewer reads only short keys while `review-*.md` also honors a legacy full-stem key; the short key wins over a stale stem key; the Balanced preset precedes `default` for `jd-*`/`sdd-*`; the restore runs for any `--agent` install. Local `cmx` (3 `test-fast` commits) pushed first at the user's choice; PR carsimax/gentle-ai#2 holds T1-T3 plus docs.
