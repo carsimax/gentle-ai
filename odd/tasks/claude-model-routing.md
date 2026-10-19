@@ -16,7 +16,7 @@ Branch: `fix/claude-model-routing` (from `cmx`). Delivery: single PR into `cmx`,
 | ID | Specs | Route | Status | Commit |
 |---|---|---|---|---|
 | T1 | S1 | inline | done (focused + suite green; 3 pre-existing cmx failures) | see git log |
-| T2 | S2 | inline | pending | |
+| T2 | S2 | inline | done (RED→GREEN; cli suite 20/20 shards) | see git log |
 | T3 | S3, S4, S5 | inline | pending | |
 
 Route evidence: one understood change per task, no parallel units, no writer reason; independent verifier at feature end (Risk items 3 and 5).
@@ -27,3 +27,5 @@ Route evidence: one understood change per task, no parallel units, no writer rea
 - **L2 (2026-10-18, user):** asked to include #5358 and #4275: "Si incluyelo porfavor."
 - **L3 (2026-10-18, user):** "si vamos con la implementacion"
 - **L4:** #5269 diff applied with `git apply --3way`; only conflict was `RoutingOptions` (fork adds `ClaudeGlobalModules`), resolved keeping both. Kiro/Pi hunks dropped. Installer resolution (Balanced preset base, then legacy, then phase assignments; role, then default, then sonnet) is kept and moved to `model` so every consumer shares it.
+- **L5:** T2 restores saved Claude assignments only for explicit-agent installs (`--agent`), the path whose state merge keeps them; state still persists the caller's selection. Mutation check: persisting the hydrated selection drops the saved `orchestrator` row, and the test catches it.
+- **L6 (2026-10-18, user):** "podemos poner en este cambio algo del contrato?, que siempre delege a subagentes, aun sean cambios pequeños, es decir que la linea principal de conversasion sea el orquestador y nada se haga inline"

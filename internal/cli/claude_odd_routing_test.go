@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/state"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
 
 // Issue #5252: Claude ODD role models are only consumed through the routing
@@ -56,4 +58,43 @@ func TestClaudeODDRoutingCarriesSavedAssignments(t *testing.T) {
 			}
 		}
 	})
+}
+
+// An explicit-agent reinstall must render Claude guidance and managed agents
+// from the saved assignments, not from the sonnet fallback, because the merge
+// that runs afterwards keeps those saved assignments in state.
+func TestExplicitClaudeInstallRendersSavedAssignments(t *testing.T) {
+	home := installTestHome(t)
+	t.Setenv("HOME", home)
+	t.Chdir(t.TempDir())
+	if err := state.Write(home, state.InstallState{
+		InstalledAgents: []string{string(model.AgentClaudeCode)},
+		ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{
+			"orchestrator": {Model: "opus"},
+			"odd-worker":   {Model: "opus", Effort: "high"},
+			"jd-judge-a":   {Model: "opus", Effort: "high"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RunInstall([]string{"--agent=claude-code", "--components=skills", "--skills=go-testing"}, system.DetectionResult{}); err != nil {
+		t.Fatalf("RunInstall() error = %v", err)
+	}
+	if body := readTextFile(t, filepath.Join(home, ".claude", "CLAUDE.md")); !strings.Contains(body, "| `odd-worker` | `opus` |") {
+		t.Error("install routing does not carry the saved odd-worker model")
+	}
+	judge := readTextFile(t, filepath.Join(home, ".claude", "agents", "jd-judge-a.md"))
+	if !strings.Contains(judge, "model: opus") || !strings.Contains(judge, "effort: high") {
+		t.Errorf("jd-judge-a.md does not carry the saved assignment:\n%s", judge)
+	}
+	saved, err := state.Read(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := saved.ClaudePhaseAssignments["orchestrator"].Model; got != "opus" {
+		t.Errorf("install rewrote saved orchestrator assignment: got %q, want opus", got)
+	}
+	if got := saved.ClaudePhaseAssignments["odd-worker"]; got.Model != "opus" || got.Effort != "high" {
+		t.Errorf("install rewrote saved odd-worker assignment: %+v", got)
+	}
 }

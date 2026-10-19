@@ -209,6 +209,13 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 		return InstallResult{}, fmt.Errorf("persist install state preflight: %w", stateErr)
 	}
 	restoreCodexServiceTier(&input.Selection, persistedState)
+	// An explicit-agent install keeps the saved Claude assignments in state, so
+	// it renders from them too. They only feed rendering: state keeps what the
+	// caller selected so persistence and its merge semantics stay unchanged.
+	callerClaudeModels, callerClaudePhases := input.Selection.ClaudeModelAssignments, input.Selection.ClaudePhaseAssignments
+	if len(flags.Agents) > 0 {
+		restorePersistedClaudeAssignments(&input.Selection, persistedState)
+	}
 	background, err := resolveOpenCodeBackgroundCLI(flags.OpenCodeBackgroundSubagentsSet, flags.OpenCodeBackgroundSubagents, persistedState)
 	if err != nil {
 		return InstallResult{}, err
@@ -337,13 +344,13 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 	// merge into the existing state so that previously installed agents and
 	// model assignments are preserved. A full install (no --agent flag) keeps
 	// overwrite semantics so the TUI selection is the source of truth.
-	claudePhaseState := claudePhaseAssignmentsToState(input.Selection.ClaudePhaseAssignments)
+	claudePhaseState := claudePhaseAssignmentsToState(callerClaudePhases)
 	newState := state.InstallState{
 		InstalledAgents:             agentIDs,
 		InstalledBinaryVersion:      AppVersion,
 		CommunityTools:              communityToolIDsToStrings(input.Selection.CommunityTools),
 		CommunityToolsConfigured:    true,
-		ClaudeModelAssignments:      claudeLegacyAssignmentsForState(input.Selection.ClaudeModelAssignments, claudePhaseState),
+		ClaudeModelAssignments:      claudeLegacyAssignmentsForState(callerClaudeModels, claudePhaseState),
 		ClaudePhaseAssignments:      claudePhaseState,
 		KiroModelAssignments:        kiroAliasesToStrings(input.Selection.KiroModelAssignments),
 		CodexModelAssignments:       codexEffortsToStrings(input.Selection.CodexModelAssignments),
