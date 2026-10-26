@@ -14,9 +14,9 @@ Objective: align the Claude Code model table with the current Anthropic models (
 
 | ID | Specs | Task | Route | Risk | Status | Commit |
 |---|---|---|---|---|---|---|
-| T1 | S1 | Haiku offers all effort levels in `ClaudeEffortsForModel`; tests in model, picker, reviewerprovider; `docs/usage.md` | worker | 3 | done (verified) | — |
-| T2 | S2 | Telemetry alias table maps to 5.5 / Fable 5.1 IDs, adds `fable`; tests; `docs/telemetry.md` | worker | 3 | done (verified) | — |
-| T3 | S1 | Converge gap: assert a haiku assignment with explicit effort validates (`ClaudePhaseAssignment.Valid`) and reaches the native reviewer (`internal/cli/review_provider_runtime_model_test.go`, which encoded haiku/low as invalid) | inline | 3 | done (verified) | — |
+| T1 | S1 | Haiku offers all effort levels in `ClaudeEffortsForModel`; tests in model, picker, reviewerprovider; `docs/usage.md` | worker | 3 | done (verified) | 3292e03c0 |
+| T2 | S2 | Telemetry alias table maps to 5.5 / Fable 5.1 IDs, adds `fable`; tests; `docs/telemetry.md` | worker | 3 | done (verified) | ee9a78360 |
+| T3 | S1 | Converge gap: assert a haiku assignment with explicit effort validates (`ClaudePhaseAssignment.Valid`) and reaches the native reviewer (`internal/cli/review_provider_runtime_model_test.go`, which encoded haiku/low as invalid) | inline | 3 | done (verified) | 3292e03c0 |
 
 ## Log
 
@@ -25,4 +25,4 @@ Objective: align the Claude Code model table with the current Anthropic models (
 
 - **L3 (2026-10-26):** T1/T2 green; fast lane found `TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault` asserting the old haiku rule, fixed under T3 with RED shown against the old effort table.
 
-Next step: full `internal/cli` run, then one commit per task (T1+T3, T2) so each can be replayed onto upstream/main.
+Next step: replay 3292e03c0 and ee9a78360 onto upstream/main for upstream issues and PRs, after the user approves their text.
