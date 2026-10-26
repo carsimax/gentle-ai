@@ -306,7 +306,7 @@ func claudeModel(id string) RuntimeModel {
 	return NormalizeRuntimeModel("anthropic", id)
 }
 
-// Claude Code frontmatter uses sonnet/opus/haiku aliases; the finite alias
+// Claude Code frontmatter uses sonnet/opus/haiku/fable aliases; the finite alias
 // table below is the only Claude-specific folding left. Selectors that defer
 // model choice carry no selected-model evidence. Anything else, including a
 // dated or revisioned model id (e.g. "claude-sonnet-5-20260101"), passes
@@ -317,11 +317,13 @@ func claudeCanonicalModelID(id string) string {
 	case "", "inherit", "default":
 		return ""
 	case "sonnet":
-		return "claude-sonnet-5"
+		return "claude-sonnet-5-5"
 	case "opus":
-		return "claude-opus-5"
+		return "claude-opus-5-5"
 	case "haiku":
-		return "claude-haiku-4-5"
+		return "claude-haiku-5-5"
+	case "fable":
+		return "claude-fable-5-1"
 	}
 	return id
 }

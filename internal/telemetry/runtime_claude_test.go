@@ -204,9 +204,10 @@ func TestClaudeModelAliasesAndUnknownSelectors(t *testing.T) {
 		selector string
 		want     RuntimeModel
 	}{
-		{selector: "sonnet", want: RuntimeModel{Provider: "anthropic", ID: "claude-sonnet-5"}},
-		{selector: "opus", want: RuntimeModel{Provider: "anthropic", ID: "claude-opus-5"}},
-		{selector: "haiku", want: RuntimeModel{Provider: "anthropic", ID: "claude-haiku-4-5"}},
+		{selector: "sonnet", want: RuntimeModel{Provider: "anthropic", ID: "claude-sonnet-5-5"}},
+		{selector: "opus", want: RuntimeModel{Provider: "anthropic", ID: "claude-opus-5-5"}},
+		{selector: "haiku", want: RuntimeModel{Provider: "anthropic", ID: "claude-haiku-5-5"}},
+		{selector: "fable", want: RuntimeModel{Provider: "anthropic", ID: "claude-fable-5-1"}},
 		{selector: "inherit", want: RuntimeModel{Provider: "unknown", ID: "unknown"}},
 		{selector: "default", want: RuntimeModel{Provider: "unknown", ID: "unknown"}},
 		{selector: "", want: RuntimeModel{Provider: "unknown", ID: "unknown"}},
@@ -240,6 +241,8 @@ func TestClaudeDatedTranscriptModelPassesThroughGenericPattern(t *testing.T) {
 	}{
 		{model: "claude-sonnet-5-20260501", want: "claude-sonnet-5-20260501"},
 		{model: "claude-opus-5-1", want: "claude-opus-5-1"},
+		{model: "claude-sonnet-5-5-20261001", want: "claude-sonnet-5-5-20261001"},
+		{model: "claude-fable-5-1", want: "claude-fable-5-1"},
 		{model: "claude-haiku-4-5-20251001", want: "claude-haiku-4-5-20251001"},
 	} {
 		t.Run(tt.model, func(t *testing.T) {
