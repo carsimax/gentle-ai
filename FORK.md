@@ -106,6 +106,16 @@ When upstream merges all the pull requests below, `main` can be reset to
 
 ## Fork changelog
 
+### 2026-10-26: Current Claude models and effort levels
+
+| Fork commit | Upstream | Change |
+|---|---|---|
+| `3292e03c0` | issue [#5653](https://github.com/Gentleman-Programming/gentle-ai/issues/5653), branch `fix/5653-haiku-effort-levels` | Haiku offers `low` to `max` effort like the other models (Claude Haiku 5.5 supports all five). Before, a haiku assignment with an explicit effort was dropped and the agent fell back to `inherit` |
+| `ee9a78360` | issue [#5771](https://github.com/Gentleman-Programming/gentle-ai/issues/5771), branch `fix/claude-telemetry-current-aliases` | Telemetry folds `opus`, `sonnet`, `haiku` and `fable` to `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5` and `claude-fable-5-1`; `fable` used to be reported as `custom` |
+
+Upstream pull requests open once each issue has `status:approved`. Rows that
+telemetry recorded under the previous IDs now appear under the 5.5 IDs.
+
 ### 2026-10-24: Claude Code subagents honor the configured models
 
 **Problem.** Upstream issues [#5610](https://github.com/Gentleman-Programming/gentle-ai/issues/5610)
