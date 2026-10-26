@@ -80,7 +80,7 @@ func TestClaudeEffortsForModelOfficialMatrix(t *testing.T) {
 		{"fable", model.ClaudeModelFable, []model.ClaudeEffort{"", "low", "medium", "high", "xhigh", "max"}},
 		{"opus", model.ClaudeModelOpus, []model.ClaudeEffort{"", "low", "medium", "high", "xhigh", "max"}},
 		{"sonnet", model.ClaudeModelSonnet, []model.ClaudeEffort{"", "low", "medium", "high", "xhigh", "max"}},
-		{"haiku", model.ClaudeModelHaiku, []model.ClaudeEffort{""}},
+		{"haiku", model.ClaudeModelHaiku, []model.ClaudeEffort{"", "low", "medium", "high", "xhigh", "max"}},
 		{"invalid", model.ClaudeModelAlias("bogus"), []model.ClaudeEffort{""}},
 	}
 
@@ -115,5 +115,13 @@ func TestClaudePhaseAssignmentsFromLegacyPreservesModelsWithDefaultEffort(t *tes
 	}
 	if _, ok := got["bad"]; ok {
 		t.Fatalf("invalid legacy alias should be ignored, got %+v", got["bad"])
+	}
+}
+
+func TestClaudePhaseAssignmentAcceptsHaikuEffort(t *testing.T) {
+	for _, effort := range []model.ClaudeEffort{"low", "medium", "high", "xhigh", "max"} {
+		if a := (model.ClaudePhaseAssignment{Model: model.ClaudeModelHaiku, Effort: effort}); !a.Valid() {
+			t.Errorf("haiku/%s assignment rejected; it would be dropped on load", effort)
+		}
 	}
 }
