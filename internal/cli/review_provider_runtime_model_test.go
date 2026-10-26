@@ -56,7 +56,6 @@ func TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault(t *test
 		{},
 		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "invalid"}}},
 		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "opus", Effort: "invalid"}}},
-		{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "haiku", Effort: "low"}}},
 		{ClaudeModelAssignments: map[string]string{"risk": "invalid"}},
 	} {
 		if err := state.Write(home, persisted); err != nil {
@@ -70,6 +69,13 @@ func TestClaudeReviewAdapterMissingAndInvalidAssignmentsUseNativeDefault(t *test
 		if claude.Model != "" || claude.Effort != model.ClaudeEffortDefault {
 			t.Errorf("invalid or absent assignment selected model=%q effort=%q", claude.Model, claude.Effort)
 		}
+	}
+	if err := state.Write(home, state.InstallState{ClaudePhaseAssignments: map[string]state.ClaudePhaseAssignmentState{"risk": {Model: "haiku", Effort: "low"}}}); err != nil {
+		t.Fatal(err)
+	}
+	haiku, err := reviewProviderAdapter(reviewProviderRoleLens, model.AgentClaudeCode, "review-risk")
+	if err != nil || haiku.(*reviewerprovider.ClaudeAdapter).Model != model.ClaudeModelHaiku || haiku.(*reviewerprovider.ClaudeAdapter).Effort != model.ClaudeEffortLow {
+		t.Fatalf("haiku/low assignment = %v, %v; Claude Haiku 5.5 supports effort", haiku, err)
 	}
 	if err := state.Write(home, state.InstallState{ClaudeModelAssignments: map[string]string{"refuter": "sonnet"}}); err != nil {
 		t.Fatal(err)

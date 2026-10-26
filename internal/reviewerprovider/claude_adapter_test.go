@@ -91,7 +91,7 @@ func TestClaudeAdapterExecutesWithSavedModelAndEffortOnlyWhenValid(t *testing.T)
 		{"fable xhigh", model.ClaudeModelFable, model.ClaudeEffortXHigh, "fable", "xhigh"},
 		{"default effort", model.ClaudeModelOpus, model.ClaudeEffortDefault, "opus", ""},
 		{"invalid effort", model.ClaudeModelOpus, "invalid", "opus", ""},
-		{"unsupported effort", model.ClaudeModelHaiku, model.ClaudeEffortLow, "haiku", ""},
+		{"haiku low", model.ClaudeModelHaiku, model.ClaudeEffortLow, "haiku", "low"},
 		{"sonnet xhigh", model.ClaudeModelSonnet, model.ClaudeEffortXHigh, "sonnet", "xhigh"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -71,12 +71,8 @@ func (e ClaudeEffort) Valid() bool {
 // model alias. The first entry is always the default/empty value.
 func ClaudeEffortsForModel(alias ClaudeModelAlias) []ClaudeEffort {
 	switch alias {
-	case ClaudeModelFable, ClaudeModelOpus:
+	case ClaudeModelFable, ClaudeModelOpus, ClaudeModelSonnet, ClaudeModelHaiku:
 		return []ClaudeEffort{ClaudeEffortDefault, ClaudeEffortLow, ClaudeEffortMedium, ClaudeEffortHigh, ClaudeEffortXHigh, ClaudeEffortMax}
-	case ClaudeModelSonnet:
-		return []ClaudeEffort{ClaudeEffortDefault, ClaudeEffortLow, ClaudeEffortMedium, ClaudeEffortHigh, ClaudeEffortXHigh, ClaudeEffortMax}
-	case ClaudeModelHaiku:
-		return []ClaudeEffort{ClaudeEffortDefault}
 	default:
 		return []ClaudeEffort{ClaudeEffortDefault}
 	}

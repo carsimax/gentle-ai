@@ -77,6 +77,7 @@ func TestClaudePickerSavesAndReopensNativeReviewRoles(t *testing.T) {
 			t.Fatalf("selected %q, want %q", picker.SelectedPhase, role)
 		}
 		HandleClaudeModelPickerNav("enter", &picker, 3) // haiku
+		HandleClaudeModelPickerNav("enter", &picker, 0) // default effort
 	}
 	_, saved := HandleClaudeModelPickerNav("enter", &picker, len(claudePhases))
 	if saved == nil {
@@ -258,8 +259,8 @@ func TestHandleCustomEffortSelect_OnlyOffersSupportedEfforts(t *testing.T) {
 
 	state.Mode = ClaudeModeModelSelect
 	_, _ = HandleClaudeModelPickerNav("enter", &state, 3) // haiku
-	if state.Mode != ClaudeModePhaseList {
-		t.Fatalf("haiku should skip effort select, mode = %v", state.Mode)
+	if state.Mode != ClaudeModeEffortSelect {
+		t.Fatalf("haiku should enter effort select, mode = %v", state.Mode)
 	}
 
 	state.Mode = ClaudeModeEffortSelect
