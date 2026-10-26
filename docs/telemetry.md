@@ -330,11 +330,12 @@ settings defaults are overridden by `/effort`, `--effort`, and
 not expose duration or an error shape: duration remains unavailable, while
 successful `Stop`/`SubagentStop` events use error category `none` (API failures
 fire the separate `StopFailure` event).
-Selected aliases map as `sonnet` to `claude-sonnet-5`, `opus` to
-`claude-opus-5`, and `haiku` to `claude-haiku-4-5`; `inherit`, `default`, and an
-empty selector remain unknown. Transcript release/revision suffixes are reduced
-by longest registered-ID prefix, so for example `claude-sonnet-5-20260501` maps
-to `claude-sonnet-5`. Other model IDs map to `custom`/`custom`.
+Selected aliases map as `sonnet` to `claude-sonnet-5-5`, `opus` to
+`claude-opus-5-5`, `haiku` to `claude-haiku-5-5`, and `fable` to
+`claude-fable-5-1`; `inherit`, `default`, and an empty selector remain unknown.
+Explicit model IDs, including dated or revisioned ones such as
+`claude-sonnet-5-5-20261001`, pass through unfolded when they match the generic
+family pattern; anything else maps to `custom`/`custom`.
 
 If a subagent transcript is missing, unreadable, or has no valid assistant usage,
 the completion records the same launch-style occurrence with unavailable token
